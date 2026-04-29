@@ -86,22 +86,72 @@ chain=forward action=fasttrack-connection ...
 
 ### Шаг 3. Запустите установщик
 
-В терминале роутера (WinBox → New Terminal или SSH):
+В терминале роутера (WinBox → New Terminal или SSH).
+
+#### Вариант A — подписка KOX Shield (рекомендуется)
+
+Если у вас подписка KOX, в Личном Кабинете на вкладке **MikroTik** нажмите «Скопировать», а затем вставьте в терминал:
 
 ```routeros
+:global koxSubUrl "https://kox.nonamenebula.ru/c/<ВАШ_ТОКЕН>"
 /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 /import file-name=install.rsc
 ```
 
-Скрипт спросит параметры VLESS:
-* Server address (IP или host)
-* Server port (по умолчанию 443)
-* UUID
-* SNI (server-name для REALITY)
-* publicKey
-* shortId
+Скрипт сам:
+1. скачает подписку,
+2. декодирует base64,
+3. найдёт все vless-ссылки внутри,
+4. **если серверов несколько — покажет список и спросит номер**:
+   ```
+   В подписке доступно серверов: 4
+   ------------------------------------------------------------
+     1) 77.105.162.239     %F0%9F%87%BA%F0%9F%87%B8%20%D0%A1%D0%A8%D0%90
+     2) 82.117.255.46      %F0%9F%87%B7%F0%9F%87%B4%20%D0%A0%D1%83%D0%BC%D1%8B%D0%BD%D0%B8%D1%8F
+     3) ...
+   ------------------------------------------------------------
+   Выберите сервер [1-4], Enter = 1:
+   ```
+   *(имена в подписке URL-encoded — ориентируйтесь по адресу)*
+5. развернёт контейнер и поднимет туннель.
 
-Все значения берутся из вашей VLESS-ссылки (`vless://UUID@HOST:PORT?...&pbk=...&sid=...&sni=...`). Если у вас подписка KOX Shield — на портале есть кнопка **«Скопировать команды для MikroTik»** которая выдаст готовый блок `:global` присваиваний — выполните его перед `import` и установщик не будет ничего спрашивать.
+Чтобы выбрать сервер заранее без вопроса:
+```routeros
+:global koxServerIndex 2
+:global koxSubUrl "https://kox.nonamenebula.ru/c/<ВАШ_ТОКЕН>"
+/tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
+/import file-name=install.rsc
+```
+
+#### Вариант B — одна vless-ссылка
+
+```routeros
+:global koxVlessUri "vless://<uuid>@host:port?type=tcp&security=reality&pbk=...&sid=...&sni=...&fp=chrome&flow=xtls-rprx-vision#name"
+/tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
+/import file-name=install.rsc
+```
+
+#### Вариант C — поля по отдельности
+
+```routeros
+:global koxServerAddress "82.117.255.46"
+:global koxServerPort    "443"
+:global koxId            "42a4aea5-588e-47e3-9c51-3a1aa444fb38"
+:global koxSni           "www.yahoo.com"
+:global koxPbk           "hp0WOIvU-ukbrCz5gFmI_J5Qfo4I-IwKOyL0ysxYMAc"
+:global koxSid           "e1bbe8b50658"
+/tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
+/import file-name=install.rsc
+```
+
+#### Вариант D — без подсказок
+
+Если запустить просто:
+```routeros
+/tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
+/import file-name=install.rsc
+```
+скрипт сначала спросит ссылку (подписка/vless/пустую — для ручного ввода полей), а затем — недостающие параметры.
 
 ### Шаг 4. Проверка
 

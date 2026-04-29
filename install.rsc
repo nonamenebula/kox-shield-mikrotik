@@ -4,14 +4,15 @@
 #
 #  Что делает этот скрипт:
 #    1. Проверяет что включён container-режим RouterOS
-#    2. Создаёт routing-таблицу r_to_vpn и address-list-ы
-#    3. Создаёт veth-интерфейс для контейнера (172.18.20.5/30)
-#    4. Настраивает mangle / NAT / firewall
-#    5. Заводит env-переменные с параметрами VLESS+REALITY
-#    6. Скачивает готовый Docker-образ catesin/xray-mikrotik-* и
+#    2. (Опционально) скачивает подписку KOX и предлагает выбор сервера
+#    3. Создаёт routing-таблицу r_to_vpn и address-list-ы
+#    4. Создаёт veth-интерфейс для контейнера (172.18.20.5/30)
+#    5. Настраивает mangle / NAT / firewall
+#    6. Заводит env-переменные с параметрами VLESS+REALITY
+#    7. Скачивает готовый Docker-образ catesin/xray-mikrotik-* и
 #       поднимает его как контейнер
-#    7. Подгружает базовый набор address-list (Telegram, YouTube, ...)
-#    8. Ставит scheduler на ежесуточное обновление списков
+#    8. Подгружает базовый набор address-list (Telegram, YouTube, ...)
+#    9. Ставит scheduler на ежесуточное обновление списков
 #
 #  Предполагается что:
 #    - RouterOS 7.20+
@@ -19,12 +20,20 @@
 #    - На устройстве есть свободное место >=40 МБ
 #      (внутреняя память / USB / NVMe)
 #
-#  Запуск (из терминала RouterOS):
+#  Самый простой запуск (из терминала RouterOS, всё одной командой):
+#    :global koxSubUrl "https://kox.nonamenebula.ru/c/<ВАШ_ТОКЕН>"
 #    /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 #    /import file-name=install.rsc
+#
+#  Альтернатива — vless-ссылка одним сервером:
+#    :global koxVlessUri "vless://<uuid>@<host>:<port>?...#<name>"
+#    /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
+#    /import file-name=install.rsc
+#
+#  Если ничего не задано заранее — скрипт спросит ссылку у вас сам.
 # =====================================================================
 
-:global koxVer "1.0"
+:global koxVer "1.1"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -68,18 +77,31 @@
 :put "[*] Будет использован образ: $imageTag"
 
 # --- 2. Параметры VLESS ------------------------------------------------------
-# Можете задать переменные перед запуском скрипта (через :global) — тогда вопросов не будет.
-# Пример:
-#   :global koxServerAddress "82.117.255.46"
-#   :global koxServerPort "443"
-#   :global koxId "42a4aea5-588e-47e3-9c51-3a1aa444fb38"
-#   :global koxFlow "xtls-rprx-vision"
-#   :global koxFp "chrome"
-#   :global koxSni "www.yahoo.com"
-#   :global koxPbk "hp0WOIvU-ukbrCz5gFmI_J5Qfo4I-IwKOyL0ysxYMAc"
-#   :global koxSid "e1bbe8b50658"
-#   :global koxSpx "/"
+#
+# Поддерживаются три способа задать сервер:
+#
+#   а) подписка KOX (рекомендуется):
+#         :global koxSubUrl "https://kox.nonamenebula.ru/c/<token>"
+#      Если в подписке несколько серверов — скрипт покажет список и спросит
+#      номер. Можно задать заранее: :global koxServerIndex 2
+#
+#   б) одна vless-ссылка:
+#         :global koxVlessUri "vless://<uuid>@<host>:<port>?...#<name>"
+#
+#   в) поля по отдельности (как раньше):
+#         :global koxServerAddress "82.117.255.46"
+#         :global koxServerPort    "443"
+#         :global koxId            "42a4aea5-588e-47e3-9c51-3a1aa444fb38"
+#         :global koxSni           "www.yahoo.com"
+#         :global koxPbk           "hp0..."
+#         :global koxSid           "e1bbe8b50658"
+#
+# Если ни одна переменная не задана — скрипт сначала спросит ссылку
+# (подписка или vless), а если её нет — поля по отдельности.
 
+:global koxSubUrl
+:global koxVlessUri
+:global koxServerIndex
 :global koxServerAddress
 :global koxServerPort
 :global koxId
@@ -90,15 +112,226 @@
 :global koxSid
 :global koxSpx
 
+# Спросить ссылку, если ничего не задано
+:if ([:len $koxSubUrl] = 0 and [:len $koxVlessUri] = 0 and [:len $koxServerAddress] = 0) do={
+  :put ""
+  :put "Вставьте ссылку из ЛК KOX:"
+  :put "  - подписка:    https://kox.nonamenebula.ru/c/<token>"
+  :put "  - или vless:   vless://<uuid>@host:port?...#name"
+  :put "  - или Enter — задать поля по отдельности"
+  :local q [:input "Ссылка: "]
+  :if ([:len $q] >= 8) do={
+    :if ([:pick $q 0 8] = "vless://") do={ :set koxVlessUri $q }
+  }
+  :if ([:len $q] >= 7) do={
+    :if ([:pick $q 0 7] = "http://" or [:pick $q 0 8] = "https://") do={ :set koxSubUrl $q }
+  }
+}
+
+# --- 2.1 Подписка → выбираем сервер → получаем vless-ссылку ----------------
+
+:if ([:len $koxSubUrl] > 0 and [:len $koxVlessUri] = 0) do={
+  :put "[*] Скачиваем подписку: $koxSubUrl"
+  :do { /file/remove [find name=kox-sub.txt] } on-error={}
+  :do {
+    /tool/fetch url=$koxSubUrl mode=https dst-path=kox-sub.txt
+  } on-error={
+    :put "ОШИБКА: не удалось скачать подписку. Проверьте URL и доступ в интернет."
+    :error "subscription fetch failed"
+  }
+  :local raw ""
+  :do { :set raw [/file/get [find name=kox-sub.txt] contents] } on-error={}
+  :do { /file/remove [find name=kox-sub.txt] } on-error={}
+
+  :if ([:len $raw] = 0) do={
+    :put "ОШИБКА: пустой ответ подписки."
+    :error "empty subscription"
+  }
+
+  # Сначала пробуем декодировать как base64 (формат подписки KOX);
+  # если не получилось или внутри нет vless:// — берём ответ как есть.
+  :local decoded ""
+  :do { :set decoded [:convert from=base64 to=raw $raw] } on-error={ :set decoded "" }
+  :if ([:typeof $decoded] != "str") do={ :set decoded [:tostr $decoded] }
+  :if ([:len $decoded] = 0 or [:typeof [:find $decoded "vless://"]] != "num") do={
+    :set decoded [:tostr $raw]
+  }
+
+  # Быстрый скан: ищем все вхождения vless:// и режем до ближайшего \n
+  :local vlessLines [:toarray ""]
+  :local pos 0
+  :local doneScan false
+  :for n from=1 to=400 do={
+    :if (!$doneScan) do={
+      :local p [:find $decoded "vless://" $pos]
+      :if ([:typeof $p] != "num") do={ :set doneScan true } else={
+        :local endP [:find $decoded "\n" ($p + 8)]
+        :local endVal [:len $decoded]
+        :if ([:typeof $endP] = "num") do={ :set endVal $endP }
+        :local line [:pick $decoded $p $endVal]
+        :if ([:len $line] > 0) do={
+          :local last [:pick $line ([:len $line] - 1) [:len $line]]
+          :if ($last = "\r") do={ :set line [:pick $line 0 ([:len $line] - 1)] }
+        }
+        :set vlessLines ($vlessLines, $line)
+        :set pos ($endVal + 1)
+      }
+    }
+  }
+
+  :local nLines [:len $vlessLines]
+  :if ($nLines = 0) do={
+    :put "ОШИБКА: в подписке не найдено ни одной vless:// ссылки."
+    :put "Возможно, подписка пустая или просрочена. Проверьте ЛК."
+    :error "no vless servers in subscription"
+  }
+
+  :local pickedIdx 1
+  :if ($nLines = 1) do={
+    :put "[*] В подписке 1 сервер — он и будет использован."
+  } else={
+    :put ""
+    :put "В подписке доступно серверов: $nLines"
+    :put "------------------------------------------------------------"
+    :local idx 1
+    :foreach ln in=$vlessLines do={
+      # извлекаем host
+      :local body [:pick $ln 8 [:len $ln]]
+      :local atPos [:find $body "@" -1]
+      :local hp ""
+      :if ([:typeof $atPos] = "num") do={ :set hp [:pick $body ($atPos + 1) [:len $body]] }
+      :local q1 [:find $hp "?" -1]
+      :if ([:typeof $q1] = "num") do={ :set hp [:pick $hp 0 $q1] }
+      :local h1 [:find $hp "#" -1]
+      :if ([:typeof $h1] = "num") do={ :set hp [:pick $hp 0 $h1] }
+      # имя из #fragment (URL-encoded — выводим как есть)
+      :local nm "—"
+      :local hashPos [:find $ln "#" -1]
+      :if ([:typeof $hashPos] = "num") do={ :set nm [:pick $ln ($hashPos + 1) [:len $ln]] }
+      :put "  $idx) $hp     $nm"
+      :set idx ($idx + 1)
+    }
+    :put "------------------------------------------------------------"
+    :if ([:len $koxServerIndex] > 0) do={
+      :set pickedIdx [:tonum $koxServerIndex]
+      :put "[*] Сервер #$pickedIdx выбран автоматически (через :global koxServerIndex)"
+    } else={
+      :local rawChoice [:input ("Выберите сервер [1-" . $nLines . "], Enter = 1: ")]
+      :if ([:len $rawChoice] = 0) do={ :set pickedIdx 1 } else={ :set pickedIdx [:tonum $rawChoice] }
+    }
+    :if ([:typeof $pickedIdx] != "num") do={ :error "invalid server choice" }
+    :if ($pickedIdx < 1 or $pickedIdx > $nLines) do={ :error "server index out of range: $pickedIdx" }
+  }
+  :set koxVlessUri ($vlessLines->($pickedIdx - 1))
+}
+
+# --- 2.2 vless-ссылка → koxXxx переменные -----------------------------------
+
+:if ([:len $koxVlessUri] > 0) do={
+  :local body [:pick $koxVlessUri 8 [:len $koxVlessUri]]
+  :local atPos [:find $body "@" -1]
+  :if ([:typeof $atPos] != "num") do={ :error "Невалидная vless-ссылка (нет @)" }
+
+  :local uuidPart [:pick $body 0 $atPos]
+  :local rest     [:pick $body ($atPos + 1) [:len $body]]
+  :local hashPos  [:find $rest "#" -1]
+  :if ([:typeof $hashPos] = "num") do={ :set rest [:pick $rest 0 $hashPos] }
+  :local qPos     [:find $rest "?" -1]
+  :local hp ""
+  :local query ""
+  :if ([:typeof $qPos] = "num") do={
+    :set hp    [:pick $rest 0 $qPos]
+    :set query [:pick $rest ($qPos + 1) [:len $rest]]
+  } else={
+    :set hp $rest
+  }
+
+  :local hostP ""
+  :local portP "443"
+  :local colPos [:find $hp ":" -1]
+  :if ([:typeof $colPos] = "num") do={
+    :set hostP [:pick $hp 0 $colPos]
+    :set portP [:pick $hp ($colPos + 1) [:len $hp]]
+  } else={
+    :set hostP $hp
+  }
+
+  :local pPbk ""; :local pSid ""; :local pSni "";
+  :local pFp "chrome"; :local pFlow "xtls-rprx-vision"; :local pSpx "/"
+  :if ([:len $query] > 0) do={
+    :local qbuf $query
+    :while ([:len $qbuf] > 0) do={
+      :local sep [:find $qbuf "&" -1]
+      :local kv ""
+      :if ([:typeof $sep] = "num") do={
+        :set kv [:pick $qbuf 0 $sep]
+        :set qbuf [:pick $qbuf ($sep + 1) [:len $qbuf]]
+      } else={
+        :set kv $qbuf
+        :set qbuf ""
+      }
+      :local eq [:find $kv "=" -1]
+      :if ([:typeof $eq] = "num") do={
+        :local k [:pick $kv 0 $eq]
+        :local v [:pick $kv ($eq + 1) [:len $kv]]
+        :if ($k = "pbk")  do={ :set pPbk  $v }
+        :if ($k = "sid")  do={ :set pSid  $v }
+        :if ($k = "sni")  do={ :set pSni  $v }
+        :if ($k = "fp")   do={ :set pFp   $v }
+        :if ($k = "flow") do={ :set pFlow $v }
+        :if ($k = "spx")  do={ :set pSpx  $v }
+      }
+    }
+  }
+
+  # %2F → / (часто встречающийся urlencode для spx)
+  :local spxDec ""
+  :local i 0
+  :while ($i < [:len $pSpx]) do={
+    :local ch3 ""
+    :if (($i + 3) <= [:len $pSpx]) do={ :set ch3 [:pick $pSpx $i ($i + 3)] }
+    :if ($ch3 = "%2F" or $ch3 = "%2f") do={
+      :set spxDec ($spxDec . "/")
+      :set i ($i + 3)
+    } else={
+      :set spxDec ($spxDec . [:pick $pSpx $i ($i + 1)])
+      :set i ($i + 1)
+    }
+  }
+  :set pSpx $spxDec
+
+  :if ([:len $koxServerAddress] = 0) do={ :set koxServerAddress $hostP }
+  :if ([:len $koxServerPort]    = 0) do={ :set koxServerPort    $portP }
+  :if ([:len $koxId]            = 0) do={ :set koxId            $uuidPart }
+  :if ([:len $koxFlow]          = 0) do={ :set koxFlow          $pFlow }
+  :if ([:len $koxFp]            = 0) do={ :set koxFp            $pFp }
+  :if ([:len $koxSni]           = 0) do={ :set koxSni           $pSni }
+  :if ([:len $koxPbk]           = 0) do={ :set koxPbk           $pPbk }
+  :if ([:len $koxSid]           = 0) do={ :set koxSid           $pSid }
+  :if ([:len $koxSpx]           = 0) do={ :set koxSpx           $pSpx }
+
+  :put ("[*] Будет использован сервер: " . $koxServerAddress . ":" . $koxServerPort)
+}
+
+# --- 2.3 Если что-то ещё не задано — спрашиваем интерактивно ----------------
+
 :if ([:len $koxServerAddress] = 0) do={ :set koxServerAddress [:input "Server address (host или IP): "] }
-:if ([:len $koxServerPort] = 0)    do={ :set koxServerPort    [:input "Server port [443]: "] ; :if ([:len $koxServerPort] = 0) do={ :set koxServerPort "443" } }
-:if ([:len $koxId] = 0)            do={ :set koxId            [:input "VLESS UUID: "] }
-:if ([:len $koxFlow] = 0)          do={ :set koxFlow          "xtls-rprx-vision" }
-:if ([:len $koxFp] = 0)            do={ :set koxFp            "chrome" }
-:if ([:len $koxSni] = 0)           do={ :set koxSni           [:input "REALITY SNI: "] }
-:if ([:len $koxPbk] = 0)           do={ :set koxPbk           [:input "REALITY publicKey: "] }
-:if ([:len $koxSid] = 0)           do={ :set koxSid           [:input "REALITY shortId: "] }
-:if ([:len $koxSpx] = 0)           do={ :set koxSpx           "/" }
+:if ([:len $koxServerPort] = 0)    do={
+  :local pp [:input "Server port [443]: "]
+  :if ([:len $pp] = 0) do={ :set koxServerPort "443" } else={ :set koxServerPort $pp }
+}
+:if ([:len $koxId]            = 0) do={ :set koxId   [:input "VLESS UUID: "] }
+:if ([:len $koxFlow]          = 0) do={ :set koxFlow "xtls-rprx-vision" }
+:if ([:len $koxFp]            = 0) do={ :set koxFp   "chrome" }
+:if ([:len $koxSni]           = 0) do={ :set koxSni  [:input "REALITY SNI: "] }
+:if ([:len $koxPbk]           = 0) do={ :set koxPbk  [:input "REALITY publicKey: "] }
+:if ([:len $koxSid]           = 0) do={ :set koxSid  [:input "REALITY shortId: "] }
+:if ([:len $koxSpx]           = 0) do={ :set koxSpx  "/" }
+
+# Финальная валидация — всё ли заполнено
+:if ([:len $koxServerAddress] = 0 or [:len $koxId] = 0 or [:len $koxPbk] = 0 or [:len $koxSni] = 0 or [:len $koxSid] = 0) do={
+  :error "Не все обязательные параметры VLESS заданы (address / id / pbk / sni / sid)"
+}
 
 # --- 3. routing-таблица + address-lists --------------------------------------
 
