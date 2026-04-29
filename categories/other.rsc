@@ -1,0 +1,35 @@
+# KOX Shield — category: Прочее (29 entries)
+# slug: other
+# Автоматически сгенерировано из portal.db (proxy_routes)
+# Запуск: /import file-name=other.rsc
+
+/ip firewall address-list
+add list=to_vpn address=2ip.ru comment="kox-cat:other"
+add list=to_vpn address=apnews.com comment="kox-cat:other"
+add list=to_vpn address=archive.org comment="kox-cat:other"
+add list=to_vpn address=bbc.co.uk comment="kox-cat:other"
+add list=to_vpn address=bbc.com comment="kox-cat:other"
+add list=to_vpn address=cnn.com comment="kox-cat:other"
+add list=to_vpn address=deezer.com comment="kox-cat:other"
+add list=to_vpn address=ebay.com comment="kox-cat:other"
+add list=to_vpn address=expressvpn.com comment="kox-cat:other"
+add list=to_vpn address=grammarly.com comment="kox-cat:other"
+add list=to_vpn address=mullvad.net comment="kox-cat:other"
+add list=to_vpn address=nnmclub.to comment="kox-cat:other"
+add list=to_vpn address=nordvpn.com comment="kox-cat:other"
+add list=to_vpn address=nytimes.com comment="kox-cat:other"
+add list=to_vpn address=patreon.com comment="kox-cat:other"
+add list=to_vpn address=paypal.com comment="kox-cat:other"
+add list=to_vpn address=proton.me comment="kox-cat:other"
+add list=to_vpn address=protonmail.com comment="kox-cat:other"
+add list=to_vpn address=protonvpn.com comment="kox-cat:other"
+add list=to_vpn address=reuters.com comment="kox-cat:other"
+add list=to_vpn address=rutor.info comment="kox-cat:other"
+add list=to_vpn address=rutracker.org comment="kox-cat:other"
+add list=to_vpn address=sc-cdn.net comment="kox-cat:other"
+add list=to_vpn address=snap.com comment="kox-cat:other"
+add list=to_vpn address=snapchat.com comment="kox-cat:other"
+add list=to_vpn address=stripe.com comment="kox-cat:other"
+add list=to_vpn address=surfshark.com comment="kox-cat:other"
+add list=to_vpn address=wikimedia.org comment="kox-cat:other"
+add list=to_vpn address=wikipedia.org comment="kox-cat:other"
