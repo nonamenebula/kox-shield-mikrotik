@@ -172,7 +172,7 @@
   :put ("[*] Конфиг sing-box загружен (" . [:len $cfg] . " байт)")
 }
 
-:if ($useSingbox) do={ :goto koxRoutingSetup }
+:if (!$useSingbox) do={
 
 # --- 2.1 Подписка → выбираем сервер → получаем vless-ссылку (legacy Xray) --
 
@@ -379,7 +379,7 @@
   :error "Не все обязательные параметры VLESS заданы (address / id / pbk / sni / sid)"
 }
 
-:koxRoutingSetup
+}
 
 # --- 3. routing-таблица + address-lists --------------------------------------
 
