@@ -33,7 +33,7 @@
 #  Если ничего не задано заранее — скрипт спросит ссылку у вас сам.
 # =====================================================================
 
-:global koxVer "1.1"
+:global koxVer "2.0"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -128,7 +128,49 @@
   }
 }
 
-# --- 2.1 Подписка → выбираем сервер → получаем vless-ссылку ----------------
+# --- 2.0 sing-box (VLESS + Hysteria2) — рекомендуется для KOX Shield ---------
+:global koxSbUrl
+:global koxEngine "xray"
+:local useSingbox false
+
+:if ([:len $koxSbUrl] = 0 and [:len $koxSubUrl] > 0) do={
+  :local sub $koxSubUrl
+  :local cpos [:find $sub "/c/" -1]
+  :if ([:typeof $cpos] = "num") do={
+    :local tok [:pick $sub ($cpos + 3) [:len $sub]]
+    :local slash [:find $tok "/" -1]
+    :if ([:typeof $slash] = "num") do={ :set tok [:pick $tok 0 $slash] }
+    :local qpos [:find $tok "?" -1]
+    :if ([:typeof $qpos] = "num") do={ :set tok [:pick $tok 0 $qpos] }
+    :if ([:len $tok] >= 8) do={
+      :set koxSbUrl ("https://kox.nonamenebula.ru/sb/" . $tok . "?mode=split&device=mikrotik")
+    }
+  }
+}
+
+:if ([:len $koxSbUrl] > 0) do={
+  :put "[*] Режим sing-box: скачиваем конфиг с портала..."
+  :do { /file/remove [find name=singbox.json] } on-error={}
+  :do {
+    /tool/fetch url=$koxSbUrl mode=https dst-path=singbox.json
+  } on-error={
+    :put "ОШИБКА: не удалось скачать sing-box.json. Проверьте URL и интернет."
+    :error "singbox fetch failed"
+  }
+  :local cfg ""
+  :do { :set cfg [/file/get [find name=singbox.json] contents] } on-error={}
+  :if ([:len $cfg] < 20) do={
+    :put "ОШИБКА: sing-box.json пустой. Проверьте подписку в личном кабинете."
+    :error "empty singbox config"
+  }
+  :set koxEngine "singbox"
+  :set useSingbox true
+  :put ("[*] Конфиг sing-box загружен (" . [:len $cfg] . " байт)")
+}
+
+:if ($useSingbox) do={ :goto koxRoutingSetup }
+
+# --- 2.1 Подписка → выбираем сервер → получаем vless-ссылку (legacy Xray) --
 
 :if ([:len $koxSubUrl] > 0 and [:len $koxVlessUri] = 0) do={
   :put "[*] Скачиваем подписку: $koxSubUrl"
@@ -333,6 +375,8 @@
   :error "Не все обязательные параметры VLESS заданы (address / id / pbk / sni / sid)"
 }
 
+:koxRoutingSetup
+
 # --- 3. routing-таблица + address-lists --------------------------------------
 
 :put "[*] Создаём routing-таблицу r_to_vpn..."
@@ -417,37 +461,56 @@
   /disk/add slot=ramstorage tmpfs-max-size=100M type=tmpfs
 }
 
-# Конфигурация container: registry + tmpdir
 /container/config/set tmpdir=ramstorage registry-url=https://registry-1.docker.io
 
-# Удалим старые env (если переустанавливаем)
-/container/envs/remove [find list=xvr]
+:local containerHost "xray-vless"
+:local containerImage $imageTag
+:local containerMounts ""
+:local containerEnv ""
 
-:put "[*] Загружаем VLESS-параметры в env-переменные..."
-/container/envs/add list=xvr key=SERVER_ADDRESS value=$koxServerAddress
-/container/envs/add list=xvr key=SERVER_PORT    value=$koxServerPort
-/container/envs/add list=xvr key=ID             value=$koxId
-/container/envs/add list=xvr key=ENCRYPTION     value="none"
-/container/envs/add list=xvr key=FLOW           value=$koxFlow
-/container/envs/add list=xvr key=FP             value=$koxFp
-/container/envs/add list=xvr key=SNI            value=$koxSni
-/container/envs/add list=xvr key=PBK            value=$koxPbk
-/container/envs/add list=xvr key=SID            value=$koxSid
-/container/envs/add list=xvr key=SPX            value=$koxSpx
+:if ($koxEngine = "singbox") do={
+  :set containerHost "kox-singbox"
+  :set containerImage "ghcr.io/sagernet/sing-box:v1.11.7"
+  :set containerMounts "singbox.json:/etc/sing-box/config.json:ro"
+} else={
+  /container/envs/remove [find list=xvr]
+  :put "[*] Загружаем VLESS-параметры в env-переменные..."
+  /container/envs/add list=xvr key=SERVER_ADDRESS value=$koxServerAddress
+  /container/envs/add list=xvr key=SERVER_PORT    value=$koxServerPort
+  /container/envs/add list=xvr key=ID             value=$koxId
+  /container/envs/add list=xvr key=ENCRYPTION     value="none"
+  /container/envs/add list=xvr key=FLOW           value=$koxFlow
+  /container/envs/add list=xvr key=FP             value=$koxFp
+  /container/envs/add list=xvr key=SNI            value=$koxSni
+  /container/envs/add list=xvr key=PBK            value=$koxPbk
+  /container/envs/add list=xvr key=SID            value=$koxSid
+  /container/envs/add list=xvr key=SPX            value=$koxSpx
+  :set containerEnv "xvr"
+}
 
 # --- 7. сам контейнер -------------------------------------------------------
 
-# Удалим старый контейнер если был
 :foreach c in=[/container/find hostname=xray-vless] do={
   /container/stop $c
   :delay 2s
   /container/remove $c
 }
+:foreach c in=[/container/find hostname=kox-singbox] do={
+  /container/stop $c
+  :delay 2s
+  /container/remove $c
+}
 
-:put "[*] Скачиваем образ $imageTag (это может занять 1-3 минуты)..."
-/container/add hostname=xray-vless interface=docker-xray-vless-veth \
-    envlist=xvr root-dir=xray-vless logging=yes start-on-boot=yes \
-    remote-image=$imageTag comment="kox-shield"
+:put "[*] Скачиваем образ $containerImage (1-3 минуты)..."
+:if ($koxEngine = "singbox") do={
+  /container/add hostname=kox-singbox interface=docker-xray-vless-veth \
+      root-dir=kox-singbox logging=yes start-on-boot=yes \
+      remote-image=$containerImage mounts=$containerMounts comment="kox-shield-singbox"
+} else={
+  /container/add hostname=xray-vless interface=docker-xray-vless-veth \
+      envlist=xvr root-dir=xray-vless logging=yes start-on-boot=yes \
+      remote-image=$containerImage comment="kox-shield-xray"
+}
 
 :put "[*] Ждём окончания распаковки..."
 :local ready false
@@ -455,8 +518,8 @@
 :while (!$ready && $tries < 60) do={
   :delay 5s
   :set tries ($tries + 1)
-  :local st [/container/get [find hostname=xray-vless] status]
-  :put "    container status: $st  ($tries/60)"
+  :local st [/container/get [find hostname=$containerHost] status]
+  :put ("    container status: " . $st . "  (" . $tries . "/60)")
   :if ($st = "stopped") do={ :set ready true }
 }
 :if (!$ready) do={
@@ -465,7 +528,7 @@
   :put "Проверьте /log print и /container print, при необходимости /container start <id>."
 } else={
   :put "[*] Запускаем контейнер..."
-  /container/start [find hostname=xray-vless]
+  /container/start [find hostname=$containerHost]
 }
 
 # --- 8. Базовый набор address-list (категории) ------------------------------

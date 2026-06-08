@@ -7,7 +7,7 @@
   ╚═╝  ╚═╝   ╚═════╝  ╚═╝  ╚═╝      ╚═╝     ╚═╝╚═╝  ╚═╝   ╚═╝
 ```
 
-**KOX Shield Mikrotik — умное шифрование трафика для роутеров MikroTik (VLESS+REALITY)**
+**KOX Shield Mikrotik — умное шифрование трафика для роутеров MikroTik (sing-box: Hysteria2 + VLESS)**
 
 [![Telegram](https://img.shields.io/badge/Telegram-Канал-blue?logo=telegram)](https://t.me/PrivateProxyKox)
 [![Bot](https://img.shields.io/badge/Telegram-Бот-blue?logo=telegram)](https://t.me/kox_nonamenebula_bot)
@@ -27,7 +27,7 @@
 | Функция | Описание |
 |---|---|
 | 🔀 **Умное шифрование (split tunnel)** | через VPN идут только домены/IP из 29 категорий, остальное напрямую |
-| ⚡ **VLESS + REALITY + Vision** | современный протокол, невидим для DPI |
+| ⚡ **Hysteria2 + VLESS** | sing-box в контейнере: HY2 (QUIC) и VLESS+REALITY |
 | 📦 **Контейнер на самом роутере** | никаких внешних мини-ПК, Raspberry Pi и т.п. |
 | 🏠 **Защита всей LAN** | один раз настроили — работает для телефонов, ТВ, ПК |
 | 🔄 **Авто-обновление списков** | scheduler ежесуточно подтягивает свежие категории с GitHub |
@@ -48,7 +48,7 @@
 
 ---
 
-## 🔑 Где взять VLESS-сервер
+## 🔑 Подписка KOX Shield (VLESS + Hysteria2)
 
 ### Готовая подписка KOX Shield (1 минута)
 
@@ -97,6 +97,8 @@ chain=forward action=fasttrack-connection ...
 /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 /import file-name=install.rsc
 ```
+
+Установщик **v2** сам построит URL конфига sing-box (`/sb/<token>?mode=split&device=mikrotik`) и поднимет контейнер `ghcr.io/sagernet/sing-box` — работают и **Hysteria2**, и VLESS из одной подписки.
 
 Скрипт сам:
 1. скачает подписку,
