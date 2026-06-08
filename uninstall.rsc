@@ -29,6 +29,8 @@
   :do { /container/remove $c } on-error={}
 }
 :do { /file/remove [find name=singbox.json] } on-error={}
+:do { /file/remove [find name="kox-mount/config.json"] } on-error={}
+:do { /container/mounts/remove [find name=kox-singbox-cfg] } on-error={}
 
 # env
 /container/envs/remove [find list=xvr]

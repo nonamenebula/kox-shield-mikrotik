@@ -35,7 +35,7 @@
 #  RouterOS не поддерживает интерактивный ввод (:input) при import.
 # =====================================================================
 
-:global koxVer "2.1"
+:global koxVer "2.2"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -456,13 +456,21 @@
 
 :local containerHost "xray-vless"
 :local containerImage $imageTag
-:local containerMounts ""
 :local containerEnv ""
 
 :if ($koxEngine = "singbox") do={
   :set containerHost "kox-singbox"
   :set containerImage "ghcr.io/sagernet/sing-box:v1.11.7"
-  :set containerMounts "singbox.json:/etc/sing-box/config.json:ro"
+  :put "[*] Mount sing-box config (RouterOS /container/mounts)..."
+  :do { /container/mounts/remove [find name=kox-singbox-cfg] } on-error={}
+  :do { /file/remove [find name="kox-mount/config.json"] } on-error={}
+  :do {
+    /file/set [find name=singbox.json] name=kox-mount/config.json
+  } on-error={
+    :put "OSHIBKA: ne udalos peremestit singbox.json v kox-mount/config.json"
+    :error "singbox config mount prep failed"
+  }
+  /container/mounts/add name=kox-singbox-cfg src=kox-mount dst=/etc/sing-box
 } else={
   /container/envs/remove [find list=xvr]
   :put "[*] Загружаем VLESS-параметры в env-переменные..."
@@ -496,7 +504,7 @@
 :if ($koxEngine = "singbox") do={
   /container/add hostname=kox-singbox interface=docker-xray-vless-veth \
       root-dir=kox-singbox logging=yes start-on-boot=yes \
-      remote-image=$containerImage mounts=$containerMounts comment="kox-shield-singbox"
+      remote-image=$containerImage mounts=kox-singbox-cfg comment="kox-shield-singbox"
 } else={
   /container/add hostname=xray-vless interface=docker-xray-vless-veth \
       envlist=xvr root-dir=xray-vless logging=yes start-on-boot=yes \
