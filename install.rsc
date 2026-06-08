@@ -4,13 +4,12 @@
 #
 #  Что делает этот скрипт:
 #    1. Проверяет что включён container-режим RouterOS
-#    2. (Опционально) скачивает подписку KOX и предлагает выбор сервера
+#    2. По подписке KOX скачивает sing-box.json (Hysteria2 + VLESS)
 #    3. Создаёт routing-таблицу r_to_vpn и address-list-ы
 #    4. Создаёт veth-интерфейс для контейнера (172.18.20.5/30)
 #    5. Настраивает mangle / NAT / firewall
-#    6. Заводит env-переменные с параметрами VLESS+REALITY
-#    7. Скачивает готовый Docker-образ catesin/xray-mikrotik-* и
-#       поднимает его как контейнер
+#    6. Поднимает контейнер ghcr.io/sagernet/sing-box (режим по умолчанию)
+#    7. Legacy: при отсутствии HY2 — fallback на Xray+VLESS+REALITY
 #    8. Подгружает базовый набор address-list (Telegram, YouTube, ...)
 #    9. Ставит scheduler на ежесуточное обновление списков
 #
@@ -21,7 +20,7 @@
 #      (внутреняя память / USB / NVMe)
 #
 #  Самый простой запуск (из терминала RouterOS, всё одной командой):
-#    :global koxSubUrl "https://kox.nonamenebula.ru/c/<ВАШ_ТОКЕН>"
+#    :global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
 #    /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 #    /import file-name=install.rsc
 #
@@ -80,21 +79,21 @@
 #
 # Поддерживаются три способа задать сервер:
 #
-#   а) подписка KOX (рекомендуется):
-#         :global koxSubUrl "https://kox.nonamenebula.ru/c/<token>"
+#   а) подписка KOX (рекомендуется, sing-box + HY2 + VLESS):
+#         :global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
 #      Если в подписке несколько серверов — скрипт покажет список и спросит
 #      номер. Можно задать заранее: :global koxServerIndex 2
 #
 #   б) одна vless-ссылка:
 #         :global koxVlessUri "vless://<uuid>@<host>:<port>?...#<name>"
 #
-#   в) поля по отдельности (как раньше):
-#         :global koxServerAddress "82.117.255.46"
+#   в) поля по отдельности (legacy Xray, только VLESS):
+#         :global koxServerAddress "203.0.113.10"
 #         :global koxServerPort    "443"
-#         :global koxId            "42a4aea5-588e-47e3-9c51-3a1aa444fb38"
-#         :global koxSni           "www.yahoo.com"
-#         :global koxPbk           "hp0..."
-#         :global koxSid           "e1bbe8b50658"
+#         :global koxId            "00000000-0000-4000-8000-000000000001"
+#         :global koxSni           "www.example.com"
+#         :global koxPbk           "REPLACE_WITH_REALITY_PUBLIC_KEY"
+#         :global koxSid           "a1b2c3d4e5f6"
 #
 # Если ни одна переменная не задана — скрипт сначала спросит ссылку
 # (подписка или vless), а если её нет — поля по отдельности.
@@ -116,7 +115,7 @@
 :if ([:len $koxSubUrl] = 0 and [:len $koxVlessUri] = 0 and [:len $koxServerAddress] = 0) do={
   :put ""
   :put "Вставьте ссылку из ЛК KOX:"
-  :put "  - подписка:    https://kox.nonamenebula.ru/c/<token>"
+  :put "  - подписка:    https://portal.example.com/c/YOUR_TOKEN"
   :put "  - или vless:   vless://<uuid>@host:port?...#name"
   :put "  - или Enter — задать поля по отдельности"
   :local q [:input "Ссылка: "]
@@ -142,8 +141,9 @@
     :if ([:typeof $slash] = "num") do={ :set tok [:pick $tok 0 $slash] }
     :local qpos [:find $tok "?" -1]
     :if ([:typeof $qpos] = "num") do={ :set tok [:pick $tok 0 $qpos] }
+    :local base [:pick $sub 0 $cpos]
     :if ([:len $tok] >= 8) do={
-      :set koxSbUrl ("https://kox.nonamenebula.ru/sb/" . $tok . "?mode=split&device=mikrotik")
+      :set koxSbUrl ($base . "/sb/" . $tok . "?mode=split&device=mikrotik")
     }
   }
 }
