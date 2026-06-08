@@ -17,12 +17,18 @@
 # scheduler
 :foreach s in=[/system/scheduler/find name=kox-update] do={ /system/scheduler/remove $s }
 
-# container
+# container (Xray legacy + sing-box)
 :foreach c in=[/container/find hostname=xray-vless] do={
   :do { /container/stop $c } on-error={}
   :delay 2s
   :do { /container/remove $c } on-error={}
 }
+:foreach c in=[/container/find hostname=kox-singbox] do={
+  :do { /container/stop $c } on-error={}
+  :delay 2s
+  :do { /container/remove $c } on-error={}
+}
+:do { /file/remove [find name=singbox.json] } on-error={}
 
 # env
 /container/envs/remove [find list=xvr]
