@@ -33,9 +33,12 @@
 #
 #  Перед /import ОБЯЗАТЕЛЬНО задайте :global koxSubUrl (или koxVlessUri).
 #  RouterOS не поддерживает интерактивный ввод (:input) при import.
+#
+#  Только контейнер (без firewall / маршрутов / списков) — свой роутинг:
+#    :global koxMinimal true
 # =====================================================================
 
-:global koxVer "2.3"
+:global koxVer "2.4"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -113,6 +116,12 @@
 :global koxPbk
 :global koxSid
 :global koxSpx
+:global koxMinimal
+
+:if ([:typeof $koxMinimal] = "nothing") do={ :set koxMinimal false }
+:if ($koxMinimal) do={
+  :put "[*] Rezhim minimal: tolko kontejner (bez firewall, marshrutov, spiskov)"
+}
 
 # Проверка: подписка должна быть задана ДО /import
 :if ([:len $koxSubUrl] = 0 and [:len $koxVlessUri] = 0 and [:len $koxServerAddress] = 0) do={
@@ -370,6 +379,7 @@
 
 # --- 3. routing-таблица + address-lists --------------------------------------
 
+:if (!$koxMinimal) do={
 :put "[*] Создаём routing-таблицу r_to_vpn..."
 :if ([:len [/routing/table/find name=r_to_vpn]] = 0) do={
   /routing/table/add disabled=no fib name=r_to_vpn
@@ -380,6 +390,7 @@
   :if ([:len [/ip/firewall/address-list/find list=RFC1918 address=$net]] = 0) do={
     /ip/firewall/address-list/add list=RFC1918 address=$net comment="kox: RFC1918"
   }
+}
 }
 
 # --- 4. veth интерфейс -------------------------------------------------------
@@ -395,6 +406,7 @@
 
 # --- 5. mangle + NAT + firewall ---------------------------------------------
 
+:if (!$koxMinimal) do={
 :put "[*] Настраиваем mangle, NAT, firewall..."
 
 :if ([:len [/ip/firewall/mangle/find comment="kox-rfc1918"]] = 0) do={
@@ -445,21 +457,25 @@
   /ip/route/add distance=1 dst-address=0.0.0.0/0 gateway=172.18.20.6 \
       routing-table=r_to_vpn comment="kox-default"
 }
+}
 
 # --- 6. ramstorage + container env ------------------------------------------
 
+:if (!$koxMinimal) do={
 :if ([:len [/disk/find slot=ramstorage]] = 0) do={
   /disk/add slot=ramstorage tmpfs-max-size=100M type=tmpfs
 }
-
 /container/config/set tmpdir=ramstorage registry-url=https://registry-1.docker.io
+}
 
 :local containerHost "xray-vless"
+:local containerComment "kox-shield-xray"
 :local containerImage $imageTag
 :local containerEnv ""
 
 :if ($koxEngine = "singbox") do={
   :set containerHost "kox-singbox"
+  :set containerComment "kox-shield-singbox"
   :set containerImage "ghcr.io/sagernet/sing-box:v1.11.7"
   :put "[*] Mount sing-box config (RouterOS /container/mounts)..."
   :do { /container/mounts/remove [find list=kox-singbox-cfg] } on-error={}
@@ -489,12 +505,12 @@
 
 # --- 7. сам контейнер -------------------------------------------------------
 
-:foreach c in=[/container/find hostname=xray-vless] do={
+:foreach c in=[/container/find where comment="kox-shield-xray"] do={
   /container/stop $c
   :delay 2s
   /container/remove $c
 }
-:foreach c in=[/container/find hostname=kox-singbox] do={
+:foreach c in=[/container/find where comment="kox-shield-singbox"] do={
   /container/stop $c
   :delay 2s
   /container/remove $c
@@ -511,31 +527,39 @@
       remote-image=$containerImage comment="kox-shield-xray"
 }
 
-:put "[*] Ждём окончания распаковки..."
+:put "[*] Zhdem raspakovku obraza..."
 :local ready false
 :local tries 0
 :while (!$ready && $tries < 60) do={
   :delay 5s
   :set tries ($tries + 1)
-  :local st [/container/get [find hostname=$containerHost] status]
-  :put ("    container status: " . $st . "  (" . $tries . "/60)")
-  :if ($st = "stopped") do={ :set ready true }
+  :local cid [/container/find where comment=$containerComment]
+  :if ([:len $cid] > 0) do={
+    :local sz ""
+    :do { :set sz [/container/get $cid container-size] } on-error={
+      :do { :set sz [/container/get $cid data-size] } on-error={ :set sz "" }
+    }
+    :if ([:len $sz] > 0 && $sz != "0" && $sz != "0B") do={ :set ready true }
+    :if ($tries >= 12) do={ :set ready true }
+  }
+  :put ("    wait " . $tries . "/60")
 }
 :if (!$ready) do={
   :put ""
-  :put "ВНИМАНИЕ: контейнер не успел распаковаться за 5 минут."
-  :put "Проверьте /log print и /container print, при необходимости /container start <id>."
+  :put "VNIMANIE: kontejner ne raspakovalsya za 5 minut."
+  :put "Prover /container print i /log print"
 } else={
   :if ($koxEngine = "singbox") do={
     :put "[*] Podklyuchaem mountlists k sing-box..."
-    /container/set [find hostname=kox-singbox] mountlists=kox-singbox-cfg
+    /container/set [find where comment=$containerComment] mountlists=kox-singbox-cfg
   }
-  :put "[*] Запускаем контейнер..."
-  /container/start [find hostname=$containerHost]
+  :put "[*] Zapuskaem kontejner..."
+  /container/start [find where comment=$containerComment]
 }
 
 # --- 8. Базовый набор address-list (категории) ------------------------------
 
+:if (!$koxMinimal) do={
 :put "[*] Подгружаем базовые категории address-list (Telegram, YouTube)..."
 :do {
   /tool/fetch url=("$koxRepo/categories/telegram.rsc") mode=https dst-path=kox-telegram.rsc
@@ -554,6 +578,7 @@
       on-event=("/tool/fetch url=\"$koxRepo/update-lists.rsc\" mode=https dst-path=kox-update.rsc; :delay 5s; /import file-name=kox-update.rsc") \
       comment="kox-shield: ежесуточное обновление address-list"
 }
+}
 
 # --- 10. Финал --------------------------------------------------------------
 
@@ -562,12 +587,15 @@
 :put "  УСТАНОВКА ЗАВЕРШЕНА"
 :put "============================================================"
 :put ""
-:put "Что дальше:"
-:put "  • Проверить статус:        /container print"
-:put "  • Посмотреть лог:          /log print where topics~\"container\""
-:put "  • Список address-list:     /ip firewall address-list print where list=to_vpn"
-:put "  • Добавить ещё категории:  скачайте categories/*.rsc и /import"
-:put "  • Тест туннеля:            /tool ping 172.217.168.206 routing-table=r_to_vpn"
+:put "Chto dalshe:"
+:put "  /container print"
+:put "  /log print where topics~\"container\""
+:if (!$koxMinimal) do={
+:put "  /ip firewall address-list print where list=to_vpn"
+:put "  /tool ping 172.217.168.206 routing-table=r_to_vpn"
+} else={
+:put "  Rezhim minimal: marshruty i firewall nastraivay sam"
+}
 :put ""
 :put "Полное руководство и все категории:"
 :put "  https://github.com/nonamenebula/kox-shield-mikrotik"
