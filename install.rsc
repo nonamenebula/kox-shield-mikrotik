@@ -35,7 +35,7 @@
 #  RouterOS не поддерживает интерактивный ввод (:input) при import.
 # =====================================================================
 
-:global koxVer "2.2"
+:global koxVer "2.3"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -462,7 +462,7 @@
   :set containerHost "kox-singbox"
   :set containerImage "ghcr.io/sagernet/sing-box:v1.11.7"
   :put "[*] Mount sing-box config (RouterOS /container/mounts)..."
-  :do { /container/mounts/remove [find name=kox-singbox-cfg] } on-error={}
+  :do { /container/mounts/remove [find list=kox-singbox-cfg] } on-error={}
   :do { /file/remove [find name="kox-mount/config.json"] } on-error={}
   :do {
     /file/set [find name=singbox.json] name=kox-mount/config.json
@@ -470,7 +470,7 @@
     :put "OSHIBKA: ne udalos peremestit singbox.json v kox-mount/config.json"
     :error "singbox config mount prep failed"
   }
-  /container/mounts/add name=kox-singbox-cfg src=kox-mount dst=/etc/sing-box
+  /container/mounts/add list=kox-singbox-cfg src=kox-mount dst=/etc/sing-box
 } else={
   /container/envs/remove [find list=xvr]
   :put "[*] Загружаем VLESS-параметры в env-переменные..."
@@ -504,7 +504,7 @@
 :if ($koxEngine = "singbox") do={
   /container/add hostname=kox-singbox interface=docker-xray-vless-veth \
       root-dir=kox-singbox logging=yes start-on-boot=yes \
-      remote-image=$containerImage mounts=kox-singbox-cfg comment="kox-shield-singbox"
+      remote-image=$containerImage comment="kox-shield-singbox"
 } else={
   /container/add hostname=xray-vless interface=docker-xray-vless-veth \
       envlist=xvr root-dir=xray-vless logging=yes start-on-boot=yes \
@@ -526,6 +526,10 @@
   :put "ВНИМАНИЕ: контейнер не успел распаковаться за 5 минут."
   :put "Проверьте /log print и /container print, при необходимости /container start <id>."
 } else={
+  :if ($koxEngine = "singbox") do={
+    :put "[*] Podklyuchaem mountlists k sing-box..."
+    /container/set [find hostname=kox-singbox] mountlists=kox-singbox-cfg
+  }
   :put "[*] Запускаем контейнер..."
   /container/start [find hostname=$containerHost]
 }
