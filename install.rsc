@@ -20,11 +20,13 @@
 #      (внутреняя память / USB / NVMe)
 #
 #  Самый простой запуск (из терминала RouterOS, всё одной командой):
-#    :global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
+#    Ссылку возьмите в ЛК https://kox.nonamenebula.ru (вкладка MikroTik) или в боте @kox_nonamenebula_bot
+#    :global koxSubUrl "https://kox.nonamenebula.ru/c/YOUR_TOKEN"
 #    /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 #    /import file-name=install.rsc
 #
-#  Альтернатива — vless-ссылка одним сервером:
+#  Другой провайдер (не KOX) — подписка или vless:
+#    :global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
 #    :global koxVlessUri "vless://<uuid>@<host>:<port>?...#<name>"
 #    /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 #    /import file-name=install.rsc
@@ -79,12 +81,13 @@
 #
 # Поддерживаются три способа задать сервер:
 #
-#   а) подписка KOX (рекомендуется, sing-box + HY2 + VLESS):
-#         :global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
-#      Если в подписке несколько серверов — скрипт покажет список и спросит
-#      номер. Можно задать заранее: :global koxServerIndex 2
+#   а) подписка (sing-box + HY2 для KOX; legacy Xray для других порталов):
+#         KOX:  :global koxSubUrl "https://kox.nonamenebula.ru/c/YOUR_TOKEN"
+#         иное: :global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
+#      Несколько серверов в legacy-режиме — скрипт спросит номер.
+#      Заранее: :global koxServerIndex 2
 #
-#   б) одна vless-ссылка:
+#   б) одна vless-ссылка (любой провайдер, только Xray):
 #         :global koxVlessUri "vless://<uuid>@<host>:<port>?...#<name>"
 #
 #   в) поля по отдельности (legacy Xray, только VLESS):
@@ -114,10 +117,11 @@
 # Спросить ссылку, если ничего не задано
 :if ([:len $koxSubUrl] = 0 and [:len $koxVlessUri] = 0 and [:len $koxServerAddress] = 0) do={
   :put ""
-  :put "Вставьте ссылку из ЛК KOX:"
-  :put "  - подписка:    https://portal.example.com/c/YOUR_TOKEN"
-  :put "  - или vless:   vless://<uuid>@host:port?...#name"
-  :put "  - или Enter — задать поля по отдельности"
+  :put "Подписка KOX — из ЛК kox.nonamenebula.ru (MikroTik) или бота @kox_nonamenebula_bot:"
+  :put "  https://kox.nonamenebula.ru/c/YOUR_TOKEN"
+  :put "Другой провайдер — своя подписка или vless:// (пример: portal.example.com/c/TOKEN)"
+  :put "  vless://<uuid>@host:port?...#name"
+  :put "Пустой Enter — задать поля VLESS по отдельности"
   :local q [:input "Ссылка: "]
   :if ([:len $q] >= 8) do={
     :if ([:pick $q 0 8] = "vless://") do={ :set koxVlessUri $q }
