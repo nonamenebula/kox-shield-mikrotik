@@ -116,7 +116,7 @@ https://portal.example.com/sb/YOUR_TOKEN?mode=split&device=mikrotik
 
 ## 📦 Установка
 
-Команды вставляйте в **New Terminal** в Winbox или в SSH/консоль RouterOS. Каждый блок — отдельная сессия: сначала задаёте `:global ...`, затем скачиваете и импортируете `install.rsc`.
+Команды вставляйте в **New Terminal** в Winbox или в SSH/консоль RouterOS. **Сначала** задаёте `:global koxSubUrl ...`, **затем** `fetch` и `import` — в одной сессии терминала. RouterOS не поддерживает интерактивный ввод при `/import`, подписку нужно указать заранее.
 
 ### Шаг 1. Подготовьте RouterOS
 
