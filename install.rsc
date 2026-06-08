@@ -38,7 +38,7 @@
 #    :global koxMinimal true
 # =====================================================================
 
-:global koxVer "2.4"
+:global koxVer "2.5"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -461,6 +461,11 @@
 
 # --- 6. ramstorage + container env ------------------------------------------
 
+# SSL dla ghcr.io / registry (bez etogo pull mozhet upast na CRL)
+:do {
+  /certificate/settings/set builtin-trust-store=all crl-use=no
+} on-error={}
+
 :if (!$koxMinimal) do={
 :if ([:len [/disk/find slot=ramstorage]] = 0) do={
   /disk/add slot=ramstorage tmpfs-max-size=100M type=tmpfs
@@ -520,6 +525,7 @@
 :if ($koxEngine = "singbox") do={
   /container/add hostname=kox-singbox interface=docker-xray-vless-veth \
       root-dir=kox-singbox logging=yes start-on-boot=yes \
+      cmd="run -c /etc/sing-box/config.json" \
       remote-image=$containerImage comment="kox-shield-singbox"
 } else={
   /container/add hostname=xray-vless interface=docker-xray-vless-veth \
