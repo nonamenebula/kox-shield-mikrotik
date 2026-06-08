@@ -31,10 +31,11 @@
 #    /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 #    /import file-name=install.rsc
 #
-#  Если ничего не задано заранее — скрипт спросит ссылку у вас сам.
+#  Перед /import ОБЯЗАТЕЛЬНО задайте :global koxSubUrl (или koxVlessUri).
+#  RouterOS не поддерживает интерактивный ввод (:input) при import.
 # =====================================================================
 
-:global koxVer "2.0"
+:global koxVer "2.1"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -98,8 +99,7 @@
 #         :global koxPbk           "REPLACE_WITH_REALITY_PUBLIC_KEY"
 #         :global koxSid           "a1b2c3d4e5f6"
 #
-# Если ни одна переменная не задана — скрипт сначала спросит ссылку
-# (подписка или vless), а если её нет — поля по отдельности.
+# Перед import задайте :global koxSubUrl (KOX) или :global koxVlessUri (legacy).
 
 :global koxSubUrl
 :global koxVlessUri
@@ -114,21 +114,15 @@
 :global koxSid
 :global koxSpx
 
-# Спросить ссылку, если ничего не задано
+# Проверка: подписка должна быть задана ДО /import
 :if ([:len $koxSubUrl] = 0 and [:len $koxVlessUri] = 0 and [:len $koxServerAddress] = 0) do={
   :put ""
-  :put "Подписка KOX — из ЛК kox.nonamenebula.ru (MikroTik) или бота @kox_nonamenebula_bot:"
-  :put "  https://kox.nonamenebula.ru/c/YOUR_TOKEN"
-  :put "Другой провайдер — своя подписка или vless:// (пример: portal.example.com/c/TOKEN)"
-  :put "  vless://<uuid>@host:port?...#name"
-  :put "Пустой Enter — задать поля VLESS по отдельности"
-  :local q [:input "Ссылка: "]
-  :if ([:len $q] >= 8) do={
-    :if ([:pick $q 0 8] = "vless://") do={ :set koxVlessUri $q }
-  }
-  :if ([:len $q] >= 7) do={
-    :if ([:pick $q 0 7] = "http://" or [:pick $q 0 8] = "https://") do={ :set koxSubUrl $q }
-  }
+  :put "OSHIBKA: ne zadana podpiska."
+  :put "Pered /import vypolnite v terminale (svoy token iz LK):"
+  :put "  :global koxSubUrl \"https://kox.nonamenebula.ru/c/VASH_TOKEN\""
+  :put "Gotovuyu komandu skopiruyte: kox.nonamenebula.ru -> MikroTik"
+  :put "ili bot @kox_nonamenebula_bot"
+  :error "koxSubUrl not set — zadajte :global koxSubUrl pered import"
 }
 
 # --- 2.0 sing-box (VLESS + Hysteria2) — рекомендуется для KOX Shield ---------
@@ -260,10 +254,10 @@
     :put "------------------------------------------------------------"
     :if ([:len $koxServerIndex] > 0) do={
       :set pickedIdx [:tonum $koxServerIndex]
-      :put "[*] Сервер #$pickedIdx выбран автоматически (через :global koxServerIndex)"
+      :put "[*] Server #$pickedIdx (koxServerIndex)"
     } else={
-      :local rawChoice [:input ("Выберите сервер [1-" . $nLines . "], Enter = 1: ")]
-      :if ([:len $rawChoice] = 0) do={ :set pickedIdx 1 } else={ :set pickedIdx [:tonum $rawChoice] }
+      :set pickedIdx 1
+      :put "[*] Neskolko serverov — berem #1. Drugoy: :global koxServerIndex 2"
     }
     :if ([:typeof $pickedIdx] != "num") do={ :error "invalid server choice" }
     :if ($pickedIdx < 1 or $pickedIdx > $nLines) do={ :error "server index out of range: $pickedIdx" }
@@ -359,24 +353,17 @@
   :put ("[*] Будет использован сервер: " . $koxServerAddress . ":" . $koxServerPort)
 }
 
-# --- 2.3 Если что-то ещё не задано — спрашиваем интерактивно ----------------
+# --- 2.3 Значения по умолчанию (legacy Xray) ---------------------------------
 
-:if ([:len $koxServerAddress] = 0) do={ :set koxServerAddress [:input "Server address (host или IP): "] }
-:if ([:len $koxServerPort] = 0)    do={
-  :local pp [:input "Server port [443]: "]
-  :if ([:len $pp] = 0) do={ :set koxServerPort "443" } else={ :set koxServerPort $pp }
-}
-:if ([:len $koxId]            = 0) do={ :set koxId   [:input "VLESS UUID: "] }
-:if ([:len $koxFlow]          = 0) do={ :set koxFlow "xtls-rprx-vision" }
-:if ([:len $koxFp]            = 0) do={ :set koxFp   "chrome" }
-:if ([:len $koxSni]           = 0) do={ :set koxSni  [:input "REALITY SNI: "] }
-:if ([:len $koxPbk]           = 0) do={ :set koxPbk  [:input "REALITY publicKey: "] }
-:if ([:len $koxSid]           = 0) do={ :set koxSid  [:input "REALITY shortId: "] }
-:if ([:len $koxSpx]           = 0) do={ :set koxSpx  "/" }
+:if ([:len $koxServerPort] = 0) do={ :set koxServerPort "443" }
+:if ([:len $koxFlow] = 0) do={ :set koxFlow "xtls-rprx-vision" }
+:if ([:len $koxFp] = 0) do={ :set koxFp "chrome" }
+:if ([:len $koxSpx] = 0) do={ :set koxSpx "/" }
 
-# Финальная валидация — всё ли заполнено
 :if ([:len $koxServerAddress] = 0 or [:len $koxId] = 0 or [:len $koxPbk] = 0 or [:len $koxSni] = 0 or [:len $koxSid] = 0) do={
-  :error "Не все обязательные параметры VLESS заданы (address / id / pbk / sni / sid)"
+  :put "OSHIBKA: dlya legacy ukazhite :global koxVlessUri \"vless://...\""
+  :put "ili polya: koxServerAddress, koxId, koxPbk, koxSni, koxSid"
+  :error "VLESS params missing"
 }
 
 }
