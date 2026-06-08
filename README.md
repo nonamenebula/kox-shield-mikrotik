@@ -23,9 +23,11 @@
 
 Автоматическая установка VPN **прямо на роутер MikroTik** через встроенный механизм контейнеров RouterOS.
 
-Установщик **v2** по умолчанию поднимает **sing-box** и скачивает готовый `sing-box.json` с портала KOX Shield — в одном конфиге работают **Hysteria2** и **VLESS+REALITY**.
+Установщик **v2** по умолчанию поднимает **sing-box** и скачивает готовый `sing-box.json` с портала — для подписчиков **KOX Shield** в одном конфиге работают **Hysteria2** и **VLESS+REALITY**. С другими провайдерами возможен режим **Xray + VLESS** (см. варианты C/D).
 
 Трафик к **выбранным сервисам** (YouTube, Telegram, Instagram, X/Twitter, Discord, ChatGPT и т.д.) идёт через VPN, остальное — напрямую через провайдера (split tunnel). Все устройства в LAN защищены без настройки на каждом телефоне/ПК.
+
+> **Подписка KOX** — оформление в [@kox_nonamenebula_bot](https://t.me/kox_nonamenebula_bot), установка одной командой из [личного кабинета](https://kox.nonamenebula.ru). **Свой VPN** — подойдут варианты с `vless://` или полями сервера вручную.
 
 ### ✨ Ключевые возможности
 
@@ -54,76 +56,138 @@
 
 ---
 
-## 🔑 Подписка KOX Shield
+## ⚡ Быстрый старт (подписка KOX Shield)
 
-### Рекомендуется — подписка из личного кабинета
+Если у вас уже есть подписка KOX — это самый короткий путь:
 
-1. Зарегистрируйтесь на портале KOX Shield (ссылка в Telegram-канале или у администратора).
-2. Во вкладке **MikroTik** скопируйте готовую команду установки — там уже подставлены ваш URL и токен.
-3. Вставьте в терминал RouterOS.
+1. Оформите или продлите подписку в боте **[@kox_nonamenebula_bot](https://t.me/kox_nonamenebula_bot)**
+2. Откройте личный кабинет **[kox.nonamenebula.ru](https://kox.nonamenebula.ru)** → вкладка **MikroTik**
+3. Скопируйте **готовую команду** (там уже ваш URL и токен) и вставьте в терминал RouterOS
+4. Дождитесь окончания установки и проверьте контейнер: `/container/print`
 
-Формат подписки (пример, **фиктивные данные**):
+Подготовка RouterOS (container, FastTrack) описана ниже в разделе **Установка** — её нужно сделать **до** запуска скрипта.
+
+---
+
+## 🔑 Откуда взять ссылку на VPN
+
+Установщик принимает **подписку** (`https://...`) или одну **vless-ссылку** (`vless://...`). Что подставлять — зависит от вашего провайдера.
+
+### У вас подписка KOX Shield (рекомендуется)
+
+Готовую команду лучше **не собирать вручную**, а скопировать из личного кабинета — там уже подставлен ваш токен.
+
+| Где взять | Ссылка |
+|---|---|
+| Telegram-бот | [@kox_nonamenebula_bot](https://t.me/kox_nonamenebula_bot) |
+| Личный кабинет | [kox.nonamenebula.ru](https://kox.nonamenebula.ru) → вкладка **MikroTik** |
+
+Формат подписки KOX (в `YOUR_TOKEN` подставьте **свой** токен из ЛК):
+
+```
+https://kox.nonamenebula.ru/c/YOUR_TOKEN
+```
+
+Установщик сам построит URL конфига sing-box на том же хосте:
+
+```
+https://kox.nonamenebula.ru/sb/YOUR_TOKEN?mode=split&device=mikrotik
+```
+
+В конфиге будут **Hysteria2** и **VLESS+REALITY** — режим sing-box, это основной сценарий KOX Shield.
+
+### У вас другой провайдер (не KOX)
+
+Скрипт тоже можно использовать, но нужна **ваша** подписка или `vless://` ссылка от провайдера. Ниже — только **фиктивный пример** формата, не копируйте его как есть:
 
 ```
 https://portal.example.com/c/YOUR_TOKEN
 ```
 
-Установщик сам построит URL конфига sing-box:
+Если портал отдаёт готовый `sing-box.json`, можно задать прямой URL (тоже пример):
 
 ```
 https://portal.example.com/sb/YOUR_TOKEN?mode=split&device=mikrotik
 ```
 
-### Legacy — только VLESS (без Hysteria2)
-
-Если в подписке нет HY2 или sing-box.json не скачивается, скрипт переключится на **Xray** в контейнере `catesin/xray-mikrotik-*` и попросит выбрать `vless://` сервер из подписки.
+Если sing-box.json недоступен — используйте **Вариант C** или **D** ниже: одна `vless://` ссылка или поля сервера вручную. В этом случае поднимется **Xray** (только VLESS+REALITY, без Hysteria2).
 
 ---
 
 ## 📦 Установка
 
+Команды вставляйте в **New Terminal** в Winbox или в SSH/консоль RouterOS. Каждый блок — отдельная сессия: сначала задаёте `:global ...`, затем скачиваете и импортируете `install.rsc`.
+
 ### Шаг 1. Подготовьте RouterOS
 
-1. Обновитесь до **RouterOS ≥ 7.20**.
-2. Скачайте **Extra packages** под вашу архитектуру с [mikrotik.com/download](https://mikrotik.com/download), залейте `container-*.npk` в `/file` и перезагрузите роутер.
-3. Включите container-режим:
+1. Обновитесь до **RouterOS ≥ 7.20** ([mikrotik.com/download](https://mikrotik.com/download)).
+2. Скачайте **Extra packages** под **вашу** архитектуру (arm / arm64 / amd64), залейте файл `container-*.npk` в **Files** и перезагрузите роутер.
+3. Включите container-режим (после команды у вас ~60 секунд на подтверждение):
    ```routeros
    /system device-mode update container=yes
    ```
-   В течение **60 секунд** нажмите **reset** на корпусе (или дождитесь таймаута и перезагрузите).
-4. Проверьте:
+   Нажмите кнопку **Reset** на корпусе роутера **или** дождитесь таймаута и перезагрузите вручную.
+4. Убедитесь, что container доступен (команда не должна выдавать ошибку):
    ```routeros
    /container/print
    ```
 
 ### Шаг 2. Отключите FastTrack
 
-FastTrack пропускает пакеты мимо mangle — KOX без этого не сработает. В `/ip firewall filter` **отключите** правило:
-```
-chain=forward action=fasttrack-connection ...
+FastTrack ускоряет форвардинг, но обходит mangle — трафик к YouTube/Telegram **не попадёт** в VPN.
+
+В Winbox: **IP → Firewall → Filter Rules** — найдите правило `fasttrack-connection` в chain `forward` и **отключите** (Disable).
+
+Или в терминале:
+```routeros
+/ip/firewall/filter/disable [find chain=forward action=fasttrack-connection]
 ```
 
 ### Шаг 3. Запустите установщик
 
-#### Вариант A — подписка KOX Shield (рекомендуется, sing-box + HY2)
+Выберите **один** вариант по таблице:
 
-Скопируйте команду из личного кабинета **MikroTik** или задайте вручную (пример):
+| Вариант | Кому подходит | Протокол |
+|---|---|---|
+| **A** | Подписка **KOX Shield** (из ЛК или бота) | sing-box: HY2 + VLESS |
+| **B** | Есть прямой URL `sing-box.json` (KOX или другой портал) | sing-box |
+| **C** | Любой провайдер, одна `vless://` ссылка | Xray: только VLESS |
+| **D** | Любой провайдер, параметры VLESS вручную | Xray: только VLESS |
+
+Если переменные (`:global koxSubUrl` и т.д.) **не задать** — скрипт спросит ссылку при запуске.
+
+#### Вариант A — подписка KOX Shield (рекомендуется)
+
+**Проще всего:** скопируйте готовый блок из **[kox.nonamenebula.ru](https://kox.nonamenebula.ru)** → **MikroTik** (или из бота [@kox_nonamenebula_bot](https://t.me/kox_nonamenebula_bot)) и вставьте в терминал.
+
+Если собираете вручную — подставьте **свой** токен из ЛК вместо `YOUR_TOKEN`:
 
 ```routeros
-:global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
+:global koxSubUrl "https://kox.nonamenebula.ru/c/YOUR_TOKEN"
 /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 /import file-name=install.rsc
 ```
 
-Установщик:
-1. из URL подписки строит адрес `sing-box.json` на **том же хосте**;
-2. скачивает конфиг с портала;
+Что делает установщик:
+1. из `/c/TOKEN` строит адрес `sing-box.json` (`/sb/TOKEN?...`) на том же хосте;
+2. скачивает конфиг с портала KOX;
 3. поднимает контейнер `ghcr.io/sagernet/sing-box`;
-4. настраивает split tunnel и address-list.
-
-> **Важно:** подставьте **свой** URL из личного кабинета, не копируйте `portal.example.com` и `YOUR_TOKEN` из примера.
+4. настраивает split tunnel и базовые address-list.
 
 #### Вариант B — прямой URL sing-box.json
+
+Когда уже знаете полный URL конфига (из ЛК или от своего портала).
+
+**KOX Shield:**
+
+```routeros
+:global koxSbUrl "https://kox.nonamenebula.ru/sb/YOUR_TOKEN?mode=split&device=mikrotik"
+:global koxSubUrl ""
+/tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
+/import file-name=install.rsc
+```
+
+**Другой портал** (пример, фиктивные данные — подставьте свой URL):
 
 ```routeros
 :global koxSbUrl "https://portal.example.com/sb/YOUR_TOKEN?mode=split&device=mikrotik"
@@ -132,7 +196,9 @@ chain=forward action=fasttrack-connection ...
 /import file-name=install.rsc
 ```
 
-#### Вариант C — legacy: одна vless-ссылка (только Xray)
+#### Вариант C — одна vless-ссылка (любой провайдер, без HY2)
+
+Подходит, если sing-box.json недоступен. Данные ниже **фиктивные** — вставьте свою `vless://` ссылку:
 
 ```routeros
 :global koxVlessUri "vless://00000000-0000-4000-8000-000000000001@203.0.113.10:443?type=tcp&security=reality&pbk=REPLACE_ME&sid=a1b2c3d4e5f6&sni=www.example.com&fp=chrome&flow=xtls-rprx-vision#Example"
@@ -140,7 +206,9 @@ chain=forward action=fasttrack-connection ...
 /import file-name=install.rsc
 ```
 
-#### Вариант D — legacy: поля VLESS по отдельности
+#### Вариант D — поля VLESS по отдельности (legacy)
+
+Если нет ни подписки, ни готовой `vless://` строки. Пример с **фиктивными** IP и ключами:
 
 ```routeros
 :global koxServerAddress "203.0.113.10"
@@ -155,26 +223,36 @@ chain=forward action=fasttrack-connection ...
 
 ### Шаг 4. Проверка
 
+После установки выполните по очереди:
+
 ```routeros
 /container/print
-# sing-box: hostname=kox-singbox, status=running
+```
+
+Ожидается контейнер `kox-singbox` со статусом **running** (или `xray-vless` при legacy-режиме).
+
+```routeros
 /log/print where topics~"container"
 /tool/ping 142.250.184.142 routing-table=r_to_vpn
 /ip/firewall/address-list/print where list=to_vpn
 ```
 
+Ping до Google через таблицу `r_to_vpn` и непустой список `to_vpn` — признак, что маршрутизация настроена. Откройте YouTube или Telegram с устройства в LAN — трафик к ним должен идти через VPN.
+
 ---
 
 ## 🗂 Категории доменов
 
-29 категорий доменов и IP — см. [`categories/CATEGORIES.md`](categories/CATEGORIES.md).
+При установке подгружается базовый набор (Telegram, YouTube и др.). Полный список — **29 категорий**, описание в [`categories/CATEGORIES.md`](categories/CATEGORIES.md).
+
+Добавить одну категорию вручную:
 
 ```routeros
 /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/categories/instagram.rsc
 /import file-name=instagram.rsc
 ```
 
-Все категории сразу:
+Все категории сразу (если при установке не всё подтянулось):
 
 ```routeros
 /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/categories/_all.rsc
@@ -270,31 +348,43 @@ WAN → интернет (Hysteria2 QUIC или VLESS+REALITY)
 
 ## ❓ FAQ
 
+**Q: У меня нет подписки KOX — можно ли пользоваться скриптом?**
+
+Да. Используйте **Вариант C** или **D** со своей `vless://` ссылкой или параметрами от другого провайдера. Split tunnel и категории доменов работают так же, но без Hysteria2 — только VLESS через Xray.
+
 **Q: Какой протокол используется?**
 
-По умолчанию **Hysteria2** через sing-box. VLESS+REALITY тоже в конфиге. Legacy-путь (только Xray+VLESS) — если sing-box.json не скачался.
+- **KOX Shield (Вариант A/B):** sing-box, в конфиге **Hysteria2** и **VLESS+REALITY**.
+- **Другой провайдер / legacy (Вариант C/D):** Xray, только **VLESS+REALITY**.
 
-**Q: Не работает YouTube**
+**Q: Где взять команду для RouterOS?**
+
+В личном кабинете [kox.nonamenebula.ru](https://kox.nonamenebula.ru) → **MikroTik**, или через бота [@kox_nonamenebula_bot](https://t.me/kox_nonamenebula_bot). Там уже подставлен ваш токен — копируйте целиком.
+
+**Q: Не работает YouTube / Telegram**
+
+1. Проверьте, что FastTrack **отключён** (Шаг 2).
+2. Контейнер запущен:
+   ```routeros
+   /container/print where hostname=kox-singbox
+   /log/print where topics~"container"
+   /tool/ping 142.250.184.142 routing-table=r_to_vpn
+   ```
+3. В списке `to_vpn` есть записи: `/ip/firewall/address-list/print where list=to_vpn`
+
+**Q: Обновилась подписка на портале KOX**
+
+Снова скопируйте команду из ЛК **MikroTik** или переустановите вручную (подставьте свой токен):
 
 ```routeros
-/container/print where hostname=kox-singbox
-/log/print where topics~"container"
-/tool/ping 142.250.184.142 routing-table=r_to_vpn
-```
-
-**Q: Обновилась подписка на портале**
-
-Переустановите или заново скачайте конфиг:
-
-```routeros
-:global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
+:global koxSubUrl "https://kox.nonamenebula.ru/c/YOUR_TOKEN"
 /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 /import file-name=install.rsc
 ```
 
-**Q: Нет пакета container**
+**Q: Нет пакета container на роутере**
 
-Архитектуры mipsbe/smips/tile не поддерживают container — см. альтернативу через мини-ПК в README [catesin/Xray-vless-reality-MikroTik](https://github.com/catesin/Xray-vless-reality-MikroTik).
+Архитектуры mipsbe / smips / tile (hAP ac², RB750 и др.) **не поддерживают** container. Вариант — мини-ПК как шлюз: [catesin/Xray-vless-reality-MikroTik](https://github.com/catesin/Xray-vless-reality-MikroTik).
 
 ---
 
