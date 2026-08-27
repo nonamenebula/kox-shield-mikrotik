@@ -27,7 +27,7 @@
 
 Трафик к **выбранным сервисам** (YouTube, Telegram, Instagram, X/Twitter, Discord, ChatGPT и т.д.) идёт через VPN, остальное — напрямую через провайдера (split tunnel). Все устройства в LAN защищены без настройки на каждом телефоне/ПК.
 
-> **Подписка KOX** — оформление в [@kox_nonamenebula_bot](https://t.me/kox_nonamenebula_bot), установка одной командой из [личного кабинета](https://kox.nonamenebula.ru). **Свой VPN** — подойдут варианты с `vless://` или полями сервера вручную.
+> **Подписка KOX** — оформление в [@kox_nonamenebula_bot](https://t.me/kox_nonamenebula_bot), установка одной командой из [личного кабинета](https://kox.nonamenebula.ru). **Свой сервер** — `hy2://` / `hysteria2://` после установки Hysteria2 или `vless://`.
 
 ### ✨ Ключевые возможности
 
@@ -71,7 +71,7 @@
 
 ## 🔑 Откуда взять ссылку на VPN
 
-Установщик принимает **подписку** (`https://...`) или одну **vless-ссылку** (`vless://...`). Что подставлять — зависит от вашего провайдера.
+Установщик принимает **подписку** (`https://.../c/TOKEN`), ссылку **Hysteria2** (`hy2://` / `hysteria2://`) или одну **vless-ссылку**. Что подставлять — зависит от того, откуда у вас VPN.
 
 ### У вас подписка KOX Shield (рекомендуется)
 
@@ -96,21 +96,22 @@ https://kox.nonamenebula.ru/sb/YOUR_TOKEN?mode=split&device=mikrotik
 
 В конфиге будут **Hysteria2** и **VLESS+REALITY** — режим sing-box, это основной сценарий KOX Shield.
 
+### У вас свой Hysteria2 (ссылка `hy2://`)
+
+После установки Hysteria2 на VPS клиентская ссылка выглядит так (это **не** `https://.../c/TOKEN`):
+
+```
+hy2://PASSWORD@YOUR-IP:443?sni=your.domain&obfs=salamander&obfs-password=OBFS#MyServer
+```
+
+или `hysteria2://...` — то же самое. Подставьте **свою** ссылку в **Вариант E** ниже. Установщик сам соберёт `sing-box.json` на роутере.
+
+Самоподписанный сертификат: добавьте в ссылку `&insecure=1`.
+
 ### У вас другой провайдер (не KOX)
 
-Скрипт тоже можно использовать, но нужна **ваша** подписка или `vless://` ссылка от провайдера. Ниже — только **фиктивный пример** формата, не копируйте его как есть:
-
-```
-https://portal.example.com/c/YOUR_TOKEN
-```
-
-Если портал отдаёт готовый `sing-box.json`, можно задать прямой URL (тоже пример):
-
-```
-https://portal.example.com/sb/YOUR_TOKEN?mode=split&device=mikrotik
-```
-
-Если sing-box.json недоступен — используйте **Вариант C** или **D** ниже: одна `vless://` ссылка или поля сервера вручную. В этом случае поднимется **Xray** (только VLESS+REALITY, без Hysteria2).
+Нужна **ваша** HTTPS-подписка, готовый `sing-box.json`, `hy2://` или `vless://`.  
+`https://portal.example.com/c/YOUR_TOKEN` — это только **пример формата**, не копируйте его. Если у провайдера другая схема URL — возьмите ссылку из его кабинета или используйте `hy2://` / `vless://`.
 
 ---
 
@@ -151,6 +152,7 @@ FastTrack ускоряет форвардинг, но обходит mangle — 
 |---|---|---|
 | **A** | Подписка **KOX Shield** (из ЛК или бота) | sing-box: HY2 + VLESS |
 | **B** | Есть прямой URL `sing-box.json` (KOX или другой портал) | sing-box |
+| **E** | Свой Hysteria2, ссылка `hy2://` / `hysteria2://` | sing-box: только HY2 |
 | **C** | Любой провайдер, одна `vless://` ссылка | Xray: только VLESS |
 | **D** | Любой провайдер, параметры VLESS вручную | Xray: только VLESS |
 
@@ -187,14 +189,32 @@ FastTrack ускоряет форвардинг, но обходит mangle — 
 /import file-name=install.rsc
 ```
 
-**Другой портал** (пример, фиктивные данные — подставьте свой URL):
+**Другой портал** — подставьте **свой** URL `sing-box.json`, не пример:
 
 ```routeros
-:global koxSbUrl "https://portal.example.com/sb/YOUR_TOKEN?mode=split&device=mikrotik"
+:global koxSbUrl "https://YOUR-PORTAL/sb/YOUR_TOKEN?mode=split&device=mikrotik"
 :global koxSubUrl ""
 /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 /import file-name=install.rsc
 ```
+
+#### Вариант E — свой Hysteria2 (`hy2://`)
+
+После `hysteria server` у вас есть клиентская ссылка. Её и вставляйте (фиктивный пример — замените на свою):
+
+```routeros
+:global koxHy2Uri "hy2://REPLACE_PASSWORD@203.0.113.10:443?sni=www.example.com&obfs=salamander&obfs-password=REPLACE_OBFS"
+/tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
+/import file-name=install.rsc
+```
+
+Можно передать ту же ссылку в `koxSubUrl` — скрипт поймёт `hy2://` и не будет искать `/c/TOKEN`.
+
+Что ещё нужно после установки:
+1. Контейнер `kox-singbox` в статусе **running**.
+2. В `to_vpn` есть домены (Telegram/YouTube грузятся сами; Instagram и остальные — шаг 4).
+3. С телефона/ПК в LAN откройте YouTube — должен идти через VPN, сайт банка — напрямую.
+4. Если свой сертификат без публичного CA: `&insecure=1` в ссылке и переустановите.
 
 #### Вариант C — одна vless-ссылка (любой провайдер, без HY2)
 
@@ -350,11 +370,16 @@ WAN → интернет (Hysteria2 QUIC или VLESS+REALITY)
 
 **Q: У меня нет подписки KOX — можно ли пользоваться скриптом?**
 
-Да. Используйте **Вариант C** или **D** со своей `vless://` ссылкой или параметрами от другого провайдера. Split tunnel и категории доменов работают так же, но без Hysteria2 — только VLESS через Xray.
+Да. Свой Hysteria2 — **Вариант E** (`hy2://`). Свой VLESS — **C** или **D**. Split tunnel и категории доменов те же.
+
+**Q: У меня ссылка hy2://, а в инструкции написано https://.../c/TOKEN**
+
+`/c/TOKEN` — это подписка **портала KOX**. После установки своего Hysteria2 у вас другая ссылка: `hy2://` или `hysteria2://`. Её нужно передать в `koxHy2Uri` (Вариант E), а не вставлять как URL портала.
 
 **Q: Какой протокол используется?**
 
 - **KOX Shield (Вариант A/B):** sing-box, в конфиге **Hysteria2** и **VLESS+REALITY**.
+- **Свой HY2 (Вариант E):** sing-box, только **Hysteria2**.
 - **Другой провайдер / legacy (Вариант C/D):** Xray, только **VLESS+REALITY**.
 
 **Q: Где взять команду для RouterOS?**

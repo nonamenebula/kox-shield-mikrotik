@@ -25,20 +25,23 @@
 #    /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 #    /import file-name=install.rsc
 #
-#  Другой провайдер (не KOX) — подписка или vless:
-#    :global koxSubUrl "https://portal.example.com/c/YOUR_TOKEN"
-#    :global koxVlessUri "vless://<uuid>@<host>:<port>?...#<name>"
+#  Свой Hysteria2 (ссылка после установки сервера, не подписка портала):
+#    :global koxHy2Uri "hy2://PASSWORD@YOUR-IP:443?sni=your.domain&obfs=salamander&obfs-password=OBFS"
 #    /tool fetch url=https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main/install.rsc
 #    /import file-name=install.rsc
 #
-#  Перед /import ОБЯЗАТЕЛЬНО задайте :global koxSubUrl (или koxVlessUri).
+#  Другой провайдер — HTTPS-подписка или одна vless:// :
+#    :global koxSubUrl "https://example.com/sub/XXXX"
+#    :global koxVlessUri "vless://<uuid>@<host>:<port>?...#<name>"
+#
+#  Перед /import задайте :global koxSubUrl / koxHy2Uri / koxVlessUri.
 #  RouterOS не поддерживает интерактивный ввод (:input) при import.
 #
 #  Только контейнер (без firewall / маршрутов / списков) — свой роутинг:
 #    :global koxMinimal true
 # =====================================================================
 
-:global koxVer "2.5"
+:global koxVer "2.6"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -105,6 +108,8 @@
 # Перед import задайте :global koxSubUrl (KOX) или :global koxVlessUri (legacy).
 
 :global koxSubUrl
+:global koxHy2Uri
+:global koxSbUrl
 :global koxVlessUri
 :global koxServerIndex
 :global koxServerAddress
@@ -123,23 +128,115 @@
   :put "[*] Rezhim minimal: tolko kontejner (bez firewall, marshrutov, spiskov)"
 }
 
-# Проверка: подписка должна быть задана ДО /import
-:if ([:len $koxSubUrl] = 0 and [:len $koxVlessUri] = 0 and [:len $koxServerAddress] = 0) do={
+# Проверка: подписка / hy2 / vless должны быть заданы ДО /import
+:if ([:len $koxSubUrl] = 0 and [:len $koxHy2Uri] = 0 and [:len $koxSbUrl] = 0 and [:len $koxVlessUri] = 0 and [:len $koxServerAddress] = 0) do={
   :put ""
   :put "OSHIBKA: ne zadana podpiska."
-  :put "Pered /import vypolnite v terminale (svoy token iz LK):"
-  :put "  :global koxSubUrl \"https://kox.nonamenebula.ru/c/VASH_TOKEN\""
-  :put "Gotovuyu komandu skopiruyte: kox.nonamenebula.ru -> MikroTik"
-  :put "ili bot @kox_nonamenebula_bot"
-  :error "koxSubUrl not set — zadajte :global koxSubUrl pered import"
+  :put "KOX LK:  :global koxSubUrl \"https://kox.nonamenebula.ru/c/VASH_TOKEN\""
+  :put "Svoy HY2: :global koxHy2Uri \"hy2://PASSWORD@HOST:443?sni=...&obfs=salamander&obfs-password=...\""
+  :put "VLESS:    :global koxVlessUri \"vless://...\""
+  :error "koxSubUrl/koxHy2Uri not set — zadajte pered import"
 }
 
 # --- 2.0 sing-box (VLESS + Hysteria2) — рекомендуется для KOX Shield ---------
-:global koxSbUrl
 :global koxEngine "xray"
 :local useSingbox false
 
-:if ([:len $koxSbUrl] = 0 and [:len $koxSubUrl] > 0) do={
+# Если в koxSubUrl/koxVlessUri передали hy2:// — это свой Hysteria, не портал
+:local hy2Src ""
+:if ([:len $koxHy2Uri] > 0) do={ :set hy2Src $koxHy2Uri }
+:if ([:len $hy2Src] = 0 and [:len $koxSubUrl] >= 6 and [:pick $koxSubUrl 0 6] = "hy2://") do={ :set hy2Src $koxSubUrl }
+:if ([:len $hy2Src] = 0 and [:len $koxSubUrl] >= 12 and [:pick $koxSubUrl 0 12] = "hysteria2://") do={ :set hy2Src $koxSubUrl }
+:if ([:len $hy2Src] = 0 and [:len $koxVlessUri] >= 6 and [:pick $koxVlessUri 0 6] = "hy2://") do={ :set hy2Src $koxVlessUri }
+:if ([:len $hy2Src] = 0 and [:len $koxVlessUri] >= 12 and [:pick $koxVlessUri 0 12] = "hysteria2://") do={ :set hy2Src $koxVlessUri }
+
+:if ([:len $hy2Src] > 0) do={
+  :put "[*] Rezhim sing-box: svoy Hysteria2 (hy2://)..."
+  :local body $hy2Src
+  :local sch [:find $body "://" -1]
+  :if ([:typeof $sch] != "num") do={ :error "nevernyy hy2:// URI" }
+  :set body [:pick $body ($sch + 3) [:len $body]]
+  :local hashPos [:find $body "#" -1]
+  :if ([:typeof $hashPos] = "num") do={ :set body [:pick $body 0 $hashPos] }
+  :local atPos [:find $body "@" -1]
+  :if ([:typeof $atPos] != "num") do={ :error "nevernyy hy2:// (net @)" }
+  :local passPart [:pick $body 0 $atPos]
+  :local rest [:pick $body ($atPos + 1) [:len $body]]
+  :local qPos [:find $rest "?" -1]
+  :local hp $rest
+  :local query ""
+  :if ([:typeof $qPos] = "num") do={
+    :set hp [:pick $rest 0 $qPos]
+    :set query [:pick $rest ($qPos + 1) [:len $rest]]
+  }
+  :local hostP $hp
+  :local portP "443"
+  :local colPos [:find $hp ":" -1]
+  :if ([:typeof $colPos] = "num") do={
+    :set hostP [:pick $hp 0 $colPos]
+    :set portP [:pick $hp ($colPos + 1) [:len $hp]]
+  }
+  :local pSni $hostP
+  :local pObfs ""
+  :local pObfsPass ""
+  :local pInsec false
+  :if ([:len $query] > 0) do={
+    :local qbuf $query
+    :while ([:len $qbuf] > 0) do={
+      :local sep [:find $qbuf "&" -1]
+      :local kv ""
+      :if ([:typeof $sep] = "num") do={
+        :set kv [:pick $qbuf 0 $sep]
+        :set qbuf [:pick $qbuf ($sep + 1) [:len $qbuf]]
+      } else={
+        :set kv $qbuf
+        :set qbuf ""
+      }
+      :local eq [:find $kv "=" -1]
+      :if ([:typeof $eq] = "num") do={
+        :local k [:pick $kv 0 $eq]
+        :local v [:pick $kv ($eq + 1) [:len $kv]]
+        :if ($k = "sni") do={ :set pSni $v }
+        :if ($k = "obfs") do={ :set pObfs $v }
+        :if ($k = "obfs-password" or $k = "obfs_password") do={ :set pObfsPass $v }
+        :if ($k = "insecure" and ($v = "1" or $v = "true")) do={ :set pInsec true }
+      }
+    }
+  }
+  :if ([:len $hostP] = 0 or [:len $passPart] = 0) do={ :error "hy2://: net host/password" }
+
+  :local jesc do={
+    :local s [:tostr $1]
+    :local out ""
+    :local i 0
+    :while ($i < [:len $s]) do={
+      :local ch [:pick $s $i ($i + 1)]
+      :if ($ch = "\\") do={ :set out ($out . "\\\\") } else={
+        :if ($ch = "\"") do={ :set out ($out . "\\\"") } else={ :set out ($out . $ch) }
+      }
+      :set i ($i + 1)
+    }
+    :return $out
+  }
+  :local jPass [$jesc $passPart]
+  :local jHost [$jesc $hostP]
+  :local jSni [$jesc $pSni]
+  :local jObfs [$jesc $pObfsPass]
+  :local tlsPart ("\"enabled\":true,\"server_name\":\"" . $jSni . "\"")
+  :if ($pInsec) do={ :set tlsPart ($tlsPart . ",\"insecure\":true") }
+  :local obfsPart ""
+  :if ($pObfs = "salamander" and [:len $pObfsPass] > 0) do={
+    :set obfsPart (",\"obfs\":{\"type\":\"salamander\",\"password\":\"" . $jObfs . "\"}")
+  }
+  :local json ("{\"log\":{\"level\":\"error\"},\"inbounds\":[{\"type\":\"tun\",\"tag\":\"tun-in\",\"address\":[\"172.18.20.6/30\"],\"auto_route\":false,\"strict_route\":false,\"stack\":\"mixed\"}],\"outbounds\":[{\"type\":\"hysteria2\",\"tag\":\"proxy\",\"server\":\"" . $jHost . "\",\"server_port\":" . $portP . ",\"password\":\"" . $jPass . "\",\"tls\":{" . $tlsPart . "}" . $obfsPart . "},{\"type\":\"direct\",\"tag\":\"direct\"}],\"route\":{\"rules\":[{\"action\":\"sniff\"},{\"protocol\":\"dns\",\"action\":\"hijack-dns\"}],\"final\":\"proxy\",\"auto_detect_interface\":true}}")
+  :do { /file/remove [find name=singbox.json] } on-error={}
+  /file/add name=singbox.json contents=$json
+  :set koxEngine "singbox"
+  :set useSingbox true
+  :put ("[*] Konfig HY2: " . $hostP . ":" . $portP)
+}
+
+:if (!$useSingbox and [:len $koxSbUrl] = 0 and [:len $koxSubUrl] > 0) do={
   :local sub $koxSubUrl
   :local cpos [:find $sub "/c/" -1]
   :if ([:typeof $cpos] = "num") do={
@@ -155,7 +252,7 @@
   }
 }
 
-:if ([:len $koxSbUrl] > 0) do={
+:if (!$useSingbox and [:len $koxSbUrl] > 0) do={
   :put "[*] Режим sing-box: скачиваем конфиг с портала..."
   :do { /file/remove [find name=singbox.json] } on-error={}
   :do {
@@ -384,6 +481,11 @@
 :if ([:len [/routing/table/find name=r_to_vpn]] = 0) do={
   /routing/table/add disabled=no fib name=r_to_vpn
 }
+:do {
+  :if ([:len [/routing/rule/find comment="kox-lookup"]] = 0) do={
+    /routing/rule/add routing-mark=r_to_vpn action=lookup table=r_to_vpn comment="kox-lookup"
+  }
+} on-error={ :put "    (routing rule: skip, mark dostatochno)" }
 
 :put "[*] Создаём address-list RFC1918..."
 :foreach net in={"10.0.0.0/8";"172.16.0.0/12";"192.168.0.0/16"} do={
@@ -407,6 +509,22 @@
 # --- 5. mangle + NAT + firewall ---------------------------------------------
 
 :if (!$koxMinimal) do={
+:put "[*] DNS i FastTrack (inache domeny v to_vpn ne rezolvyatsya)..."
+:do {
+  :local ds [/ip/dns/get servers]
+  :if ([:len $ds] = 0) do={
+    /ip/dns/set servers=1.1.1.1,8.8.8.8 allow-remote-requests=yes
+  } else={
+    /ip/dns/set allow-remote-requests=yes
+  }
+} on-error={
+  :do { /ip/dns/set allow-remote-requests=yes } on-error={}
+}
+:foreach f in=[/ip/firewall/filter/find chain=forward action=fasttrack-connection] do={
+  :do { /ip/firewall/filter/disable $f } on-error={}
+}
+:put "[*] FastTrack otkluchen"
+
 :put "[*] Настраиваем mangle, NAT, firewall..."
 
 :if ([:len [/ip/firewall/mangle/find comment="kox-rfc1918"]] = 0) do={
@@ -436,6 +554,18 @@
 :if ([:len [/ip/firewall/nat/find comment="kox-masq"]] = 0) do={
   /ip/firewall/nat/add action=masquerade chain=srcnat \
       out-interface=docker-xray-vless-veth comment="kox-masq"
+}
+
+# LAN DNS через роутер — address-list по доменам заполняется теми же IP
+:if ([:len [/ip/firewall/nat/find comment="kox-dns-redir-udp"]] = 0) do={
+  /ip/firewall/nat/add action=redirect chain=dstnat protocol=udp dst-port=53 \
+      to-ports=53 src-address=!172.18.20.0/30 in-interface-list=!WAN \
+      comment="kox-dns-redir-udp"
+}
+:if ([:len [/ip/firewall/nat/find comment="kox-dns-redir-tcp"]] = 0) do={
+  /ip/firewall/nat/add action=redirect chain=dstnat protocol=tcp dst-port=53 \
+      to-ports=53 src-address=!172.18.20.0/30 in-interface-list=!WAN \
+      comment="kox-dns-redir-tcp"
 }
 
 # Контейнер должен резолвить DNS через RouterOS — открываем 53/udp,tcp

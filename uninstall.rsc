@@ -47,6 +47,7 @@
 :foreach a in=[/ip/firewall/address-list/find where list=to_vpn]   do={ /ip/firewall/address-list/remove $a }
 :foreach a in=[/ip/firewall/address-list/find where list=RFC1918 comment="kox: RFC1918"] do={ /ip/firewall/address-list/remove $a }
 :foreach t in=[/routing/table/find name=r_to_vpn] do={ /routing/table/remove $t }
+:foreach r in=[/routing/rule/find comment="kox-lookup"] do={ /routing/rule/remove $r }
 
 # IP / интерфейс
 :foreach a in=[/ip/address/find interface=docker-xray-vless-veth] do={ /ip/address/remove $a }
