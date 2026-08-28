@@ -311,7 +311,8 @@ LAN client (192.168.88.x)
         ▼
 [Container kox-singbox]
    ghcr.io/sagernet/sing-box
-   config: singbox.json (HY2 + VLESS outbounds, TUN)
+   eth0 172.18.20.6  →  tun0 172.19.0.1 (auto_route)
+   config: singbox.json (HY2 + VLESS outbounds)
         │
         ▼
 WAN → интернет (Hysteria2 QUIC или VLESS+REALITY)
@@ -386,15 +387,27 @@ WAN → интернет (Hysteria2 QUIC или VLESS+REALITY)
 
 В личном кабинете [kox.nonamenebula.ru](https://kox.nonamenebula.ru) → **MikroTik**, или через бота [@kox_nonamenebula_bot](https://t.me/kox_nonamenebula_bot). Там уже подставлен ваш токен — копируйте целиком.
 
+**Q: Не работает YouTube / Telegram, в панели Hysteria «не подключен», в логах только start контейнера**
+
+Это как раз тот случай, когда контейнер жив, а трафик в Hysteria не доходит. sing-box подключается к серверу **только когда есть пакеты в TUN**. Если TUN сидит на IP veth (`172.18.20.6`) или `auto_route` выключен — сессии нет, панель молчит, в `/log` только `started`.
+
+С **v2.7** TUN = `172.19.0.1/30`, `auto_route=true`, плюс NAT `kox-masq-wan`. Переустановите установщиком с GitHub `main` (команда из ЛК).
+
+После установки:
+```routeros
+/container/print where hostname=kox-singbox
+/log/print where topics~"container"
+/ip/firewall/nat/print where comment~"kox-masq"
+/tool/ping 142.250.184.142 routing-table=r_to_vpn
+/ip/firewall/address-list/print where list=to_vpn
+```
+
+В логах контейнера должны появиться строки sing-box (`inbound/tun`, `outbound/hysteria2`), не только `*** start`. FastTrack должен быть выключен (Шаг 2).
+
 **Q: Не работает YouTube / Telegram**
 
 1. Проверьте, что FastTrack **отключён** (Шаг 2).
-2. Контейнер запущен:
-   ```routeros
-   /container/print where hostname=kox-singbox
-   /log/print where topics~"container"
-   /tool/ping 142.250.184.142 routing-table=r_to_vpn
-   ```
+2. Контейнер запущен и в логах есть не только `started` (см. вопрос выше).
 3. В списке `to_vpn` есть записи: `/ip/firewall/address-list/print where list=to_vpn`
 
 **Q: Обновилась подписка на портале KOX**
