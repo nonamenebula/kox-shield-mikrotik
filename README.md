@@ -96,6 +96,16 @@ https://kox.nonamenebula.ru/sb/YOUR_TOKEN?mode=split&device=mikrotik
 
 В конфиге будут **Hysteria2** и **VLESS+REALITY** — режим sing-box, это основной сценарий KOX Shield.
 
+Смена локации без переустановки (как `kox switch` на Keenetic). Скрипт уже лежит на роутере после установки:
+
+```
+/import file-name=kox-switch.rsc
+:global koxServerIndex 2
+/import file-name=kox-switch.rsc
+```
+
+Первый импорт печатает номера. Второй записывает выбранный сервер и перезапускает контейнер. Если локация перестанет открываться, она сама не сменится — нужен другой номер из списка.
+
 ### У вас свой Hysteria2 (ссылка `hy2://`)
 
 После установки Hysteria2 на VPS клиентская ссылка выглядит так (это **не** `https://.../c/TOKEN`):

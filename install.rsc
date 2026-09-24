@@ -725,6 +725,15 @@
 }
 }
 
+# Подписка для kox-switch.rsc (список локаций и смена без переустановки)
+:if ([:len $koxSubUrl] > 8 and [:pick $koxSubUrl 0 4] = "http") do={
+  :do { /file/remove [find name=kox-sub.url] } on-error={}
+  :do { /file/add name=kox-sub.url contents=$koxSubUrl } on-error={}
+  :do {
+    /tool/fetch url=("$koxRepo/kox-switch.rsc") mode=https dst-path=kox-switch.rsc
+  } on-error={ :put "    preduprezhdenie: kox-switch.rsc ne zagruzhen" }
+}
+
 # --- 10. Финал --------------------------------------------------------------
 
 :put ""
@@ -741,6 +750,11 @@
 } else={
 :put "  Rezhim minimal: marshruty i firewall nastraivay sam"
 }
+:put ""
+:put "Локации:"
+:put "  /import file-name=kox-switch.rsc"
+:put "  :global koxServerIndex 2"
+:put "  /import file-name=kox-switch.rsc"
 :put ""
 :put "Полное руководство и все категории:"
 :put "  https://github.com/nonamenebula/kox-shield-mikrotik"
