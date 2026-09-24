@@ -131,15 +131,39 @@
               :local semi [:find $tail ";"]
               :if ([:typeof $semi] = "num") do={ :set ms [:pick $tail 0 $semi] }
             } else={
-              :do {
-                :local r [/ping address=$ip count=3 interval=300ms as-value]
-                :local loss [:tostr ($r->"packet-loss")]
-                :if ($loss = "100" or $loss = "100%") do={
-                  :set ms "timeout"
-                } else={
-                  :set ms [:tostr ($r->"avg-rtt")]
-                }
-              } on-error={ :set ms "timeout" }
+              :local sum 0
+              :local n 0
+              :for i from=1 to=3 do={
+                :do {
+                  :local r [/ping address=$ip count=1 as-value]
+                  :local t [:tostr ($r->"time")]
+                  :if ([:len $t] = 0) do={ :set t [:tostr ($r->"avg-rtt")] }
+                  :local num 0
+                  :local ok false
+                  :local msPos [:find $t "ms"]
+                  :if ([:typeof $msPos] = "num") do={
+                    :set num [:tonum [:pick $t 0 $msPos]]
+                    :set ok true
+                  } else={
+                    :local dot [:find $t "."]
+                    :if ([:typeof $dot] = "num") do={
+                      :local frac [:pick $t ($dot + 1) ($dot + 4)]
+                      :while ([:len $frac] < 3) do={ :set frac ($frac . "0") }
+                      :set num [:tonum [:pick $frac 0 3]]
+                      :set ok true
+                    }
+                  }
+                  :if ($ok and [:typeof $num] = "num" and $num > 0) do={
+                    :set sum ($sum + $num)
+                    :set n ($n + 1)
+                  }
+                } on-error={}
+              }
+              :if ($n > 0) do={
+                :set ms (($sum / $n) . "ms")
+              } else={
+                :set ms "timeout"
+              }
               :set cache ($cache . $ip . "=" . $ms . ";")
             }
           }
