@@ -230,7 +230,7 @@
   }
   # tun0 = 172.19.0.1, не 172.18.20.6 (это veth). auto_route=true, иначе
   # пакеты youtube/telegram не попадут в HY2 и панель останется «не подключен».
-  :local json ("{\"log\":{\"level\":\"info\",\"timestamp\":true},\"inbounds\":[{\"type\":\"tun\",\"tag\":\"tun-in\",\"interface_name\":\"tun0\",\"address\":[\"172.19.0.1/30\"],\"mtu\":1400,\"auto_route\":true,\"strict_route\":false,\"stack\":\"mixed\",\"inet4_route_exclude_address\":[\"172.18.20.4/30\",\"10.0.0.0/8\",\"192.168.0.0/16\"]}],\"outbounds\":[{\"type\":\"hysteria2\",\"tag\":\"proxy\",\"server\":\"" . $jHost . "\",\"server_port\":" . $portP . ",\"password\":\"" . $jPass . "\",\"tls\":{" . $tlsPart . "}" . $obfsPart . "},{\"type\":\"direct\",\"tag\":\"direct\"}],\"route\":{\"rules\":[{\"action\":\"sniff\"},{\"protocol\":\"dns\",\"action\":\"hijack-dns\"}],\"final\":\"proxy\",\"auto_detect_interface\":true}}")
+  :local json ("{\"log\":{\"level\":\"info\",\"timestamp\":true},\"inbounds\":[{\"type\":\"tun\",\"tag\":\"tun-in\",\"interface_name\":\"tun0\",\"address\":[\"172.19.0.1/30\"],\"mtu\":1400,\"auto_route\":true,\"strict_route\":false,\"stack\":\"mixed\",\"route_exclude_address\":[\"172.18.20.4/30\",\"10.0.0.0/8\",\"192.168.0.0/16\"]}],\"outbounds\":[{\"type\":\"hysteria2\",\"tag\":\"proxy\",\"server\":\"" . $jHost . "\",\"server_port\":" . $portP . ",\"password\":\"" . $jPass . "\",\"tls\":{" . $tlsPart . "}" . $obfsPart . "},{\"type\":\"direct\",\"tag\":\"direct\"}],\"route\":{\"rules\":[{\"action\":\"sniff\"},{\"protocol\":\"dns\",\"action\":\"hijack-dns\"}],\"final\":\"proxy\",\"auto_detect_interface\":true}}")
   :do { /file/remove [find name=singbox.json] } on-error={}
   /file/add name=singbox.json contents=$json
   :set koxEngine "singbox"
