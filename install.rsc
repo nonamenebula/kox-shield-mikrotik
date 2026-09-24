@@ -751,10 +751,10 @@
 :put "  Rezhim minimal: marshruty i firewall nastraivay sam"
 }
 :put ""
-:put "Локации:"
+:put "Lokacii:"
 :put "  /import file-name=kox-switch.rsc"
-:put "  :global koxServerIndex 2"
-:put "  /import file-name=kox-switch.rsc"
+:put "  \$kox switch"
+:put "  \$kox switch 4"
 :put ""
 :put "Полное руководство и все категории:"
 :put "  https://github.com/nonamenebula/kox-shield-mikrotik"
