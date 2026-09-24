@@ -1,8 +1,8 @@
-# Список локаций KOX и переключение без переустановки.
-# Список:  /import file-name=kox-switch.rsc
-# Смена:   :global koxServerIndex 2
+# List locations or switch without reinstalling.
+# List:    /import file-name=kox-switch.rsc
+# Switch:  :global koxServerIndex 2
 #          /import file-name=kox-switch.rsc
-# Подписка берётся из :global koxSubUrl или из файла kox-sub.url
+# Subscription: :global koxSubUrl or file kox-sub.url
 
 :global koxSubUrl
 :global koxServerIndex
@@ -30,7 +30,7 @@
 :local qpos [:find $tok "?" -1]
 :if ([:typeof $qpos] = "num") do={ :set tok [:pick $tok 0 $qpos] }
 :local base [:pick $sub 0 $cpos]
-:local listUrl ($base . "/sb/" . $tok . "/servers?mode=split")
+:local listUrl ($base . "/sb/" . $tok . "/servers?mode=split&ascii=1")
 :local cfgUrl ($base . "/sb/" . $tok . "?mode=split&device=mikrotik")
 
 :local wantSwitch false
