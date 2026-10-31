@@ -78,7 +78,7 @@
     :do { /file/remove [find name="kox-mount/config.json"] } on-error={}
     /file/set [find name=singbox.json] name=kox-mount/config.json
     /container/start $cid
-    :put ("Gotovo. Aktivna lokaciya #$idx")
+    :put ("Gotovo. Aktivna lokaciya #$idx (VLESS/HY2 kak v podpiske)")
   } else={
     :do { /file/remove [find name=kox-servers.txt] } on-error={}
     :do {
@@ -110,13 +110,21 @@
         :local num ""
         :local name ""
         :local ip ""
+        :local proto ""
         :if ([:typeof $p1] = "num") do={
           :set num [:pick $line 0 $p1]
           :local tail [:pick $line ($p1 + 1) [:len $line]]
           :set p2 [:find $tail "|"]
           :if ([:typeof $p2] = "num") do={
             :set name [:pick $tail 0 $p2]
-            :set ip [:pick $tail ($p2 + 1) [:len $tail]]
+            :local rest [:pick $tail ($p2 + 1) [:len $tail]]
+            :local p3 [:find $rest "|"]
+            :if ([:typeof $p3] = "num") do={
+              :set ip [:pick $rest 0 $p3]
+              :set proto [:pick $rest ($p3 + 1) [:len $rest]]
+            } else={
+              :set ip $rest
+            }
           }
         }
         :if ([:len $num] > 0 and [:len $name] > 0) do={
@@ -169,7 +177,10 @@
           }
           :local pad $name
           :while ([:len $pad] < 16) do={ :set pad ($pad . " ") }
-          :put ($num . "  " . $pad . $ms)
+          :local plabel ""
+          :if ($proto = "hy2" or $proto = "hysteria2") do={ :set plabel " HY2" }
+          :if ($proto = "vless") do={ :set plabel " VLESS" }
+          :put ($num . "  " . $pad . $ms . $plabel)
         }
       }
     }

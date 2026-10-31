@@ -12,6 +12,7 @@
 #    7. Legacy: при отсутствии HY2 — fallback на Xray+VLESS+REALITY
 #    8. Подгружает базовый набор address-list (Telegram, YouTube, ...)
 #    9. Ставит scheduler на ежесуточное обновление списков
+#   10. kox-switch.rsc: \$kox switch N — VLESS или HY2 по выбранной ноде подписки
 #
 #  Предполагается что:
 #    - RouterOS 7.20+
@@ -41,7 +42,7 @@
 #    :global koxMinimal true
 # =====================================================================
 
-:global koxVer "2.7"
+:global koxVer "2.8"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
