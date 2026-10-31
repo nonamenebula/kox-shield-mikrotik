@@ -61,7 +61,7 @@
     :put ("[*] Server #$idx")
     :do { /file/remove [find name=singbox.json] } on-error={}
     :do {
-      /tool/fetch url=($cfgUrl . $idx) mode=https dst-path=singbox.json
+      /tool/fetch url=($cfgUrl . $idx) mode=https check-certificate=no dst-path=singbox.json
     } on-error={
       :put "Ne udalos skachat konfig. Proverte nomer: \$kox switch"
       :error "config fetch failed"
@@ -82,7 +82,7 @@
   } else={
     :do { /file/remove [find name=kox-servers.txt] } on-error={}
     :do {
-      /tool/fetch url=$listUrl mode=https dst-path=kox-servers.txt
+      /tool/fetch url=$listUrl mode=https check-certificate=no dst-path=kox-servers.txt
     } on-error={
       :put "Ne udalos skachat spisok serverov"
       :error "server list fetch failed"
