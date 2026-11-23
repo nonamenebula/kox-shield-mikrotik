@@ -51,7 +51,7 @@
 | **amd64 (x86)** | ✅ образ `v1.11.7` | CHR (Cloud Hosted Router), x86 RouterOS |
 | **mipsbe / smips / tile** | ❌ | hAP ac², hAP ac³, hAP lite/mini, RB951, RB750 — **container-пакета нет** |
 
-В `/system resource print` и hEX Refresh, и обычный armv7 называются `arm`. Различие в `/system routerboard print`: у ARM v5 поле `firmware-type` равно `en7562`. На таком процессоре образ `v1.11.7` завершается с `Illegal instruction`. Установщик с версии 2.9 сам подставляет образ из [kox-shield-mikrotik-armv5](https://github.com/nonamenebula/kox-shield-mikrotik-armv5). Если контейнер уже создан старым установщиком, команды замены лежат в README того репозитория.
+В `/system resource print` и hEX Refresh, и обычный armv7 называются `arm`. Различие в `/system routerboard print`: у ARM v5 поле `firmware-type` равно `en7562`. На таком процессоре образ `v1.11.7` завершается с `Illegal instruction`. Установщик с версии 2.9 сам подставляет образ из [kox-shield-mikrotik-armv5](https://github.com/nonamenebula/kox-shield-mikrotik-armv5). Первый запуск на такой плате описан там в разделе [«Первый запуск»](https://github.com/nonamenebula/kox-shield-mikrotik-armv5#первый-запуск). Если контейнер уже создан старым установщиком и падает с `Illegal instruction`, замена без переустановки — в разделе [«Контейнер уже установлен и падает»](https://github.com/nonamenebula/kox-shield-mikrotik-armv5#контейнер-уже-установлен-и-падает). Смена серверов и списки после этого — обычные команды KOX ниже.
 
 > Точный список: [mikrotik.com/products/matrix](https://mikrotik.com/products/matrix) (фильтр по архитектуре + «package: container» в [release-notes](https://mikrotik.com/download/changelogs)).
 >
