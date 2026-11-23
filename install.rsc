@@ -8,7 +8,10 @@
 #    3. Создаёт routing-таблицу r_to_vpn и address-list-ы
 #    4. Создаёт veth-интерфейс для контейнера (172.18.20.5/30)
 #    5. Настраивает mangle / NAT / firewall
-#    6. Поднимает контейнер ghcr.io/sagernet/sing-box (режим по умолчанию)
+#    6. Поднимает контейнер sing-box.
+#       arm64 и arm v7: ghcr.io/sagernet/sing-box:v1.11.7
+#       процессор en7562 (ARM v5, hEX Refresh E50UG):
+#       https://github.com/nonamenebula/kox-shield-mikrotik-armv5
 #    7. Legacy: при отсутствии HY2 — fallback на Xray+VLESS+REALITY
 #    8. Подгружает базовый набор address-list (Telegram, YouTube, ...)
 #    9. Ставит scheduler на ежесуточное обновление списков
@@ -42,7 +45,7 @@
 #    :global koxMinimal true
 # =====================================================================
 
-:global koxVer "2.8"
+:global koxVer "2.9"
 :global koxRepo "https://raw.githubusercontent.com/nonamenebula/kox-shield-mikrotik/main"
 
 :put ""
@@ -55,6 +58,16 @@
 
 :local arch [/system resource get architecture-name]
 :put "[*] Architecture: $arch"
+
+# /system resource показывает и v7, и v5 просто как arm.
+# У плат на EN7562 в routerboard firmware-type равен en7562.
+:local koxArmV5 false
+:local fwtype ""
+:do { :set fwtype [/system routerboard get firmware-type] } on-error={}
+:if ($fwtype = "en7562") do={
+  :set koxArmV5 true
+  :put "[*] Процессор en7562 (ARM v5). Образ: kox-shield-mikrotik-armv5, sing-box 1.11.9"
+}
 
 :local containerEnabled true
 :do {
@@ -620,7 +633,9 @@
 :if ($koxEngine = "singbox") do={
   :set containerHost "kox-singbox"
   :set containerComment "kox-shield-singbox"
-  :set containerImage "ghcr.io/sagernet/sing-box:v1.11.7"
+  :if (!$koxArmV5) do={
+    :set containerImage "ghcr.io/sagernet/sing-box:v1.11.7"
+  }
   :put "[*] Mount sing-box config (RouterOS /container/mounts)..."
   :do { /container/mounts/remove [find list=kox-singbox-cfg] } on-error={}
   :do { /file/remove [find name="kox-mount/config.json"] } on-error={}
@@ -660,6 +675,18 @@
   /container/remove $c
 }
 
+:if ($koxEngine = "singbox" && $koxArmV5) do={
+  :put "[*] Скачиваем образ ARM v5 (sing-box 1.11.9)..."
+  /tool fetch url="https://kox.nonamenebula.ru/static/kox-mikrotik/sing-box-1.11.9-armv5.tar" mode=https dst-path=kox-singbox-armv5.tar
+  /container/add hostname=kox-singbox interface=docker-xray-vless-veth \
+      root-dir=kox-singbox logging=yes start-on-boot=yes \
+      mountlists=kox-singbox-cfg dns=172.18.20.5 \
+      cmd="run -c /etc/sing-box/config.json" \
+      file=kox-singbox-armv5.tar comment="kox-shield-singbox"
+} else={
+:if ($koxEngine = "singbox") do={
+  :set containerImage "ghcr.io/sagernet/sing-box:v1.11.7"
+}
 :put "[*] Скачиваем образ $containerImage (1-3 минуты)..."
 :if ($koxEngine = "singbox") do={
   /container/add hostname=kox-singbox interface=docker-xray-vless-veth \
@@ -671,6 +698,7 @@
   /container/add hostname=xray-vless interface=docker-xray-vless-veth \
       envlist=xvr root-dir=xray-vless logging=yes start-on-boot=yes \
       remote-image=$containerImage comment="kox-shield-xray"
+}
 }
 
 :put "[*] Zhdem raspakovku obraza..."

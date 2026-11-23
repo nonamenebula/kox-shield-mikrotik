@@ -45,10 +45,13 @@
 
 | Архитектура | Поддерживается | Примеры моделей |
 |---|---|---|
-| **arm64** | ✅ | RB5009, hAP ax², hAP ax³, Chateau ax, CCR2004, CCR2116, hEX refresh |
-| **arm** (v7) | ✅ | L009UiGS, hEX S, RB4011 (с container-расширением), некоторые CRS |
-| **amd64 (x86)** | ✅ | CHR (Cloud Hosted Router), x86 RouterOS |
+| **arm64** | ✅ образ `ghcr.io/sagernet/sing-box:v1.11.7` | RB5009, hAP ax², hAP ax³, Chateau ax, CCR2004, CCR2116 |
+| **arm** (v7) | ✅ тот же образ | L009UiGS, RB4011 (с container-расширением), некоторые CRS |
+| **arm v5**, `firmware-type: en7562` | ✅ отдельный образ sing-box 1.11.9 | hEX Refresh (E50UG) и другие платы на этом процессоре. Репозиторий: [kox-shield-mikrotik-armv5](https://github.com/nonamenebula/kox-shield-mikrotik-armv5) |
+| **amd64 (x86)** | ✅ образ `v1.11.7` | CHR (Cloud Hosted Router), x86 RouterOS |
 | **mipsbe / smips / tile** | ❌ | hAP ac², hAP ac³, hAP lite/mini, RB951, RB750 — **container-пакета нет** |
+
+В `/system resource print` и hEX Refresh, и обычный armv7 называются `arm`. Различие в `/system routerboard print`: у ARM v5 поле `firmware-type` равно `en7562`. На таком процессоре образ `v1.11.7` завершается с `Illegal instruction`. Установщик с версии 2.9 сам подставляет образ из [kox-shield-mikrotik-armv5](https://github.com/nonamenebula/kox-shield-mikrotik-armv5). Если контейнер уже создан старым установщиком, команды замены лежат в README того репозитория.
 
 > Точный список: [mikrotik.com/products/matrix](https://mikrotik.com/products/matrix) (фильтр по архитектуре + «package: container» в [release-notes](https://mikrotik.com/download/changelogs)).
 >
@@ -325,7 +328,8 @@ LAN client (192.168.88.x)
         │
         ▼
 [Container kox-singbox]
-   ghcr.io/sagernet/sing-box
+   arm64 / arm v7: ghcr.io/sagernet/sing-box:v1.11.7
+   arm v5 (en7562): образ из kox-shield-mikrotik-armv5, sing-box 1.11.9
    eth0 172.18.20.6  →  tun0 172.19.0.1 (auto_route)
    config: singbox.json (HY2 + VLESS outbounds)
         │
